@@ -79,7 +79,7 @@ The decision closes this question only. It closes no deployment, trust, real-CI,
 
 ## Verification runner contract (frozen by T001)
 
-T001 writes `scripts/verify.mjs` (engine and CLI), `scripts/verify-modes.mjs` (registry) and `tests/tooling/verification-runner.test.mjs` (self-tests). After the T001 hardening commit (amendment A-006 below) these three files are **frozen**. No later task lists them, and before accepting any later task the orchestrator runs:
+T001 writes `scripts/verify.mjs` (engine and CLI), `scripts/verify-modes.mjs` (registry) and `tests/tooling/verification-runner.test.mjs` (self-tests). After the latest governed runner commit (amendment A-007 below, which supersedes the A-006 baseline) these three files are **frozen**. No later task lists them, and before accepting any later task the orchestrator runs:
 
 `git diff --quiet <T001-sha> HEAD -- scripts/verify.mjs scripts/verify-modes.mjs tests/tooling/verification-runner.test.mjs`
 
@@ -105,7 +105,7 @@ Only a recorded architect amendment can add a mode. It does so through a new `[O
 | fetch-node.sh | Use a short `GNUPGHOME` that does not depend on a long `TMPDIR`, and print the gpg log on failure (validator defect: "File name too long"). Set the cleanup trap right after the first `mktemp` (F1). Embed the pinned `bin/node` SHA-256 (`904a6d34…2a52`) as a constant, and re-check it plus a hash of the bundled npm tree on every run (F2). Precheck every tool used: `mktemp`, `readlink`, `awk`, `sed`, `grep` (F3). |
 
 **Recorded without change.**
-- *Gate identifiers.* They stay as the runner emits them: `platform-inventory(POLICY-PENDING)`, `trusted-certificate-key-custody`, `validated-oidc-smtp`, `external-pdf-reader`, `declared-hardware`, `real-ci`, `production-hermes`. The registry row was aligned in fa3f3b6.
+- *Gate identifiers* (superseded by A-007, which removes `platform-inventory(POLICY-PENDING)`). They stay as the runner emits them: `platform-inventory(POLICY-PENDING)`, `trusted-certificate-key-custody`, `validated-oidc-smtp`, `external-pdf-reader`, `declared-hardware`, `real-ci`, `production-hermes`. The registry row was aligned in fa3f3b6.
 - *L2.* Registry, environment or sentinel failures before `acceptance` dispatch return 6 or 7 without the gate list. They are still non-zero, so this is accepted as is.
 - *Usage line.* The no-mode output reads `verify: - USAGE`. This is cosmetic and accepted.
 - *F4, accepted deviation.* `scripts/fetch-node.sh` pins exactly one signer fingerprint (`5BE8A3F6C8A5C01D106C0AD820B1A390B168D356`, the v24.22.2 release signer) instead of the README's full releaser list. That is stricter and fails closed. A future runtime bump must update the pin with its measured signer.
@@ -122,6 +122,32 @@ Only a recorded architect amendment can add a mode. It does so through a new `[O
   - the scope check against T001's `files:`;
   - the transcript model check;
   - a regression reviewer re-check of the items above.
+
+### Amendment A-007: platform gate removal, N1 and N2 (2026-11-08)
+
+**Basis.** Two inputs drive this round:
+- the owner decision on platform license scope (§ Owner decision above; opensoft/openSig-spec#3);
+- the read-only re-check of the A-006 hardening commit f31842b. It came back RE-CHECK: PASS with two LOW defects, tracked as opensoft/openSig-code#3.
+
+**Scope.** One governed T001 runner round, following the same pattern as A-006. It uses T001's `files:` list and verify command and adds no mode. The only registry text that changes is the `acceptance` gate list.
+
+| Item | Change |
+|---|---|
+| Gate list | Remove `platform-inventory(POLICY-PENDING)` from the runner's external gate list. `acceptance` still returns FAIL and names the six remaining gates: `trusted-certificate-key-custody`, `validated-oidc-smtp`, `external-pdf-reader`, `declared-hardware`, `real-ci`, `production-hermes`. RT-28 asserts exactly these six. |
+| N1 | Require `.npmrc`'s non-blank, non-comment lines to equal exactly the three frozen `key=true` lines, compared as a whole like `tsconfig.json`. A quoted key, a section header or an extra key such as `script-shell` gives ENV_MISMATCH. |
+| N2 | RT-17 asserts that a reason starts with `runtime `, so the runtime-version check is proven on its own. |
+
+**Re-freeze.**
+- The freeze baseline moves to the A-007 commit, and `<T001-sha>` in every orchestrator freeze check means that commit.
+- Accepting the round requires the T001 verify command, `npm run verify -- no-secrets`, the scope check against T001's `files:`, the transcript model check, and a read-only re-check.
+- No other runner edit is allowed afterwards, except through a new architect-amendment `[O]` task.
+
+**T002 follow-up.** It runs after A-007 is accepted and keeps T002's `files:` and verify.
+- `scripts/platform-inventory.mjs` reports the platform inventory as recorded separately (status `INVENTORIED`) instead of `POLICY-PENDING`.
+- It resolves `PLAYWRIGHT_BROWSERS_PATH` exactly as the frozen runner does: that variable when set, otherwise the default cache. This is the platform half of review finding R11.
+- LI-09 asserts the new status, and that platform entries never affect the application gate.
+- `docs/platform-inventory.md` is updated to match.
+- Acceptance: `npm run verify -- license-inventory`, `no-secrets`, the scope check and the model check.
 
 ### Statuses
 
@@ -162,7 +188,7 @@ Each mode is `{ task, kind, files, minTests, requiredCases, capabilities, eviden
   - Aggregates run their components in order.
   - A `harness` or `contract` component never counts as success-criterion evidence.
   - `acceptance-local` writes the receipt and requires the committed `docs/evidence/acceptance.json` to carry the same tree digest. It returns CAPABILITY_ABSENT when a local capability (`openssl`, `chromium`, `hermes-runtime`) is absent. It always lists the external gates as `OPEN` with `release_ready: false`.
-  - `acceptance` is the release gate. It returns FAIL while any gate is OPEN or POLICY-PENDING, and it is no task's verify.
+  - `acceptance` is the release gate. It returns FAIL while any gate is OPEN, and it is no task's verify.
 - **Registry completeness.** The runner and its self-test also check that every `tests/**/*.test.mjs` is claimed by exactly one mode, and that the registry's mode names equal the list below exactly.
 
 ### Self-tests (`tests/tooling/verification-runner.test.mjs`)
@@ -244,7 +270,7 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 | `operations` | T024 | unit | `tests/operations/**/*.test.mjs` | 6 | OP-01..OP-03 | — | — |
 | `all-unit` | (npm test) | aggregate | components: every `unit`, `harness` and `contract` mode without capabilities | — | — | — | — |
 | `acceptance-local` | T025 | aggregate | components: every mode above except `tooling`, `us3-real-model` and `all-unit`, in task order | — | union must cover SC001-*, SC002-01..SC002-26, SC003-*, SC004-*, SC005-*, SC006-* | openssl, chromium, hermes-runtime | `.verify-out/acceptance-local/receipt.json` with `release_ready: false` and external gates OPEN; committed `docs/evidence/acceptance.json` with the same tree digest |
-| `acceptance` | (release gate) | release | components: `acceptance-local` plus the open gates, named exactly as the frozen runner emits them: `platform-inventory(POLICY-PENDING)`, `trusted-certificate-key-custody`, `validated-oidc-smtp`, `external-pdf-reader`, `declared-hardware`, `real-ci`, `production-hermes` | — | — | external-pdf-reader, declared-hardware, ci-run | receipt with every gate closed; FAIL while any is OPEN |
+| `acceptance` | (release gate) | release | components: `acceptance-local` plus the open gates, named exactly as the frozen runner emits them after A-007: `trusted-certificate-key-custody`, `validated-oidc-smtp`, `external-pdf-reader`, `declared-hardware`, `real-ci`, `production-hermes` | — | — | external-pdf-reader, declared-hardware, ci-run | receipt with every gate closed; FAIL while any is OPEN |
 
 `typecheck: true` applies to every non-aggregate mode, `tooling` included, which proves the TypeScript pin and tsconfig work. Each aggregate typechecks once.
 
