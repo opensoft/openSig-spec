@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "openSig Corporate Signing MVP",
-    "version": "0.2.1-draft",
+    "version": "0.2.2-draft",
     "license": {
       "name": "Apache-2.0",
       "identifier": "Apache-2.0"
@@ -462,7 +462,7 @@
               "schema": {
                 "type": "string",
                 "contentMediaType": "application/pdf",
-                "description": "At most 10 MiB (streaming cap) and 50 pages; parsed only in the isolated parse service; draft only"
+                "description": "At most 10 MiB (streaming cap) and 50 pages; parsed only in the isolated parse service; draft only; pages with an effective CropBox different from the MediaBox are rejected (cropbox_differs)"
               }
             }
           }
@@ -2138,7 +2138,7 @@
       "PageGeometry": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Displayed page size after applying /Rotate, in PDF points.",
+        "description": "Displayed page size after applying /Rotate, in PDF points. Pages whose effective (inherited) CropBox differs from the MediaBox are rejected at upload (422 unsupported_pdf, detail cropbox_differs), so the displayed page always equals the MediaBox with /Rotate applied.",
         "properties": {
           "number": {
             "type": "integer",
@@ -2201,7 +2201,7 @@
       "Rect": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Normalized to the displayed (rotation-applied) page: origin top-left, x rightward, y downward, each value in [0,1]; x+width<=1 and y+height<=1 are enforced by the server (422 field_out_of_bounds). The server maps to PDF user space using the page's /Rotate and /MediaBox.",
+        "description": "Normalized to the displayed (rotation-applied) page: origin top-left, x rightward, y downward, each value in [0,1]; x+width<=1 and y+height<=1 are enforced by the server (422 field_out_of_bounds). The server maps to PDF user space using the page's /Rotate and /MediaBox; pages with an effective CropBox different from the MediaBox never reach preparation (rejected at upload with detail cropbox_differs).",
         "properties": {
           "x": {
             "type": "number",
@@ -3495,6 +3495,11 @@
             "pattern": "^[0-9a-f]{64}$",
             "description": "Lowercase hex SHA-256 over exact bytes"
           },
+          "approval_evidence_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Value of the signed CMS attribute opensig-approval-evidence-digest (OID 2.25.254263291653419018820250361524609646248); the check approval-evidence-digest compares it with the package's approval-manifest.json"
+          },
           "timestamp_status": {
             "enum": [
               "trusted",
@@ -3572,6 +3577,7 @@
           "revision_coverage",
           "seal_type",
           "signer_certificate_sha256",
+          "approval_evidence_digest",
           "timestamp_status",
           "revocation_status",
           "verifier",
@@ -3708,7 +3714,7 @@
       "ApprovalManifest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "approval-manifest.json in the package. approval_digest = SHA-256 of the canonical JSON of the record without approval_digest; prior_approval_digest chains approvals in ordinal order.",
+        "description": "approval-manifest.json in the package. approval_digest = SHA-256 of the canonical JSON of the record without approval_digest; prior_approval_digest chains approvals in ordinal order. approval_evidence_digest = SHA-256 (lowercase hex) of the RFC 8785 canonical JSON of this manifest WITHOUT final_pdf_digest (every other field is fixed before sealing). That digest is committed inside the organization seal as the CMS signed attribute opensig-approval-evidence-digest (OID 2.25.254263291653419018820250361524609646248, value OCTET STRING of the 32 digest bytes), so replacing recipient identities, consent wording or approvals in this sidecar breaks the binding even if package-index.json is recomputed.",
         "properties": {
           "schema": {
             "const": "opensig.approval-manifest/1"
@@ -3777,6 +3783,26 @@
               "development_certificate"
             ]
           },
+          "seal_audit_anchor": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "This envelope's envelope.seal_started audit event, written before composition; its event_digest commits the tenant chain up to that point",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "event_digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$",
+                "description": "Lowercase hex SHA-256 over exact bytes"
+              }
+            },
+            "required": [
+              "seq",
+              "event_digest"
+            ]
+          },
           "final_pdf_digest": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$",
@@ -3795,6 +3821,7 @@
           "approvals",
           "approved_composition_digest",
           "seal",
+          "seal_audit_anchor",
           "final_pdf_digest"
         ]
       },
@@ -4325,7 +4352,7 @@
         }
       },
       "Unprocessable": {
-        "description": "unsupported_pdf (malformed, encrypted, already signed, over 50 pages, unsupported features), field_out_of_bounds, unsupported_characters or destination_not_allowed",
+        "description": "unsupported_pdf (malformed, encrypted, already signed, over 50 pages, active content, effective CropBox different from MediaBox [details code cropbox_differs], unsupported features), field_out_of_bounds, unsupported_characters or destination_not_allowed",
         "content": {
           "application/json": {
             "schema": {

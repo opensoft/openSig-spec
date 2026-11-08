@@ -74,7 +74,7 @@ The decision closes this question only. It closes no deployment, trust, real-CI,
 
 - **Application gate (strict, must pass).** The application-dependency gate covers the shipped npm closure plus every bundled asset copied into a distributable. It is strict, it has no waiver, and it must actually pass for everything the code ships (T002/T027; T035 build provenance).
 - **Platform inventory.** A separate inventory (`scripts/platform-inventory.mjs`, `docs/platform-inventory.md`) records with status `INVENTORIED`: the pinned Node runtime and its embedded components, linked system libraries, the browser revision, the OpenSSL CLI, util-linux `unshare` and the Hermes image. Platform entries never affect the application gate.
-- **Release gate.** The platform question no longer blocks release; amendment A-007 removes that gate from the runner. The release gate (`acceptance` mode) still fails on its six other open gates, and no task may mark any of them passed.
+- **Release gate.** The platform question no longer blocks release; amendment A-007 removes that gate from the runner. The release gate (`acceptance` mode) still fails on its seven open gates (A-007 as amended, including `parser-network-sandbox`), and no task may mark any of them passed.
 - **Dev/test tools.** npm `devDependencies` are inventoried with full license data, labeled `non-shipped`, and the release build proves they contribute no bytes to the distributable. TypeScript 6.0.3 itself carries third-party notices (DefinitelyTyped MIT, Unicode, W3C, CC-BY-4.0 in its `lib` files; measured in `ThirdPartyNoticeText.txt`). It is a build tool, not an application dependency; this is recorded for the owner, not waived.
 
 ## Verification runner contract (frozen by T001)
@@ -136,6 +136,8 @@ Only a recorded architect amendment can add a mode. It does so through a new `[O
 | Gate list | Remove `platform-inventory(POLICY-PENDING)` from the runner's external gate list, and add the new production gate `parser-network-sandbox`. That gate closes only with evidence from the deployment environment that the PDF parse worker's namespace sandbox is active; local evidence never closes it. `acceptance` still returns FAIL and names exactly these seven gates, in this order: `trusted-certificate-key-custody`, `validated-oidc-smtp`, `external-pdf-reader`, `declared-hardware`, `real-ci`, `production-hermes`, `parser-network-sandbox`. RT-28 asserts exactly these seven. |
 | N1 | Require `.npmrc`'s non-blank, non-comment lines to equal exactly the three frozen `key=true` lines, compared as a whole like `tsconfig.json`. A quoted key, a section header or an extra key such as `script-shell` gives ENV_MISMATCH. |
 | N2 | RT-17 asserts that a reason starts with `runtime `, so the runtime-version check is proven on its own. |
+| N3 (A-008) | The `.npmrc` check normalises CRLF and rejects any character outside tab, LF and printable ASCII. A CR-only line or U+2028/U+2029 can no longer hide `script-shell=` or `ignore-scripts=false` from the N1 comparison. Two cases are added inside RT-34. |
+| Codex [1] (A-008) | RT-12 treats a test child in state `Z` (read from `/proc/<pid>/stat`) as terminated, or reaps it before its parent is terminated, so containers whose PID 1 does not reap orphans no longer fail RT-12. |
 
 **Re-freeze.**
 - The freeze baseline moves to the A-007 commit, and `<T001-sha>` in every orchestrator freeze check means that commit.
@@ -446,6 +448,16 @@ Each entry names a path and what an edit there moves. Every listed path is `[O]`
   - **New gate.** `parser-network-sandbox` (A-007) stays OPEN until deployment-environment evidence exists.
   - **Evidence wording.** Evidence and receipts report the observed local capability (`netns-enforced (local)` or `unavailable`) and never imply that the production gate passed.
   - **Caveat.** Some CI hosts refuse unprivileged user namespaces (for example Ubuntu 24.04's AppArmor restriction). There the service fails closed in production mode, and the gate stays OPEN.
+
+- **A-008: review-findings ledger and scope rulings.** The ledger and the Phase 2 close criteria are in tasks.md § "Review findings ledger (A-008)". The rulings:
+  - **P01.** T003's DB-11/DB-12 pin only the T003 baseline tables and accept every data-model entity. Each task that appends a table tests it in its own mode.
+  - **P07.** T003 makes the raw audit insert hook module-private, handed out once through `claimRestrictedInsert()`. T029 extends JCS-06 statically and at runtime.
+  - **`TenantStore.list()`.** Fails loudly past its cap with `StorageLimitError`, and T003 adds a keyset iterator that callers must use.
+  - **S2.** Reject an effective CropBox that differs from the MediaBox at upload (`cropbox_differs`), through T033, the contract and a defensive check in T036.
+  - **P15.** Only `OPENSIG_PARSER_ALLOW_UNSANDBOXED=1` permits the parser's unsandboxed development mode, and only when namespaces are unavailable.
+  - **P11.** The tenants table is canonical. T005 enforces `allowed_roles` through an injected TenantPolicy, and T031 wires it after the lanes merge.
+  - **S1.** The pre-seal approval manifest digest is a CMS signed attribute (OID 2.25.254263291653419018820250361524609646248). The work spans T038, T013, T037, T014, T016 and T012.
+  - **S3.** Directory fsync after rename (data-model.md).
 
 ## Delivery and Landing
 

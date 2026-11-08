@@ -45,7 +45,7 @@ Requirements that hold regardless of engine:
   - Upload validation (T007/T034) and composition (T036) both call this service.
 - **`src/cryptograph/compose/`.** An incremental-update writer. It appends appearance streams: drawn signatures become vector path operators from stroke points, and typed text and dates use Helvetica with WinAnsiEncoding, not embedded. It also appends an AcroForm signature field, a `/Sig` dictionary (`/Filter /Adobe.PPKLite`, `/SubFilter /ETSI.CAdES.detached`, `/M` labeled unsigned server time), a fixed-size `/ByteRange` placeholder and a fixed-size `/Contents` placeholder.
 - **`src/cryptograph/cms/`.**
-  - **Encoding.** A DER encoder and a detached CMS SignedData builder. The signed attributes are contentType, messageDigest and signingCertificateV2; there is no signingTime attribute.
+  - **Encoding.** A DER encoder and a detached CMS SignedData builder. The signed attributes are contentType, messageDigest, signingCertificateV2 and `opensig-approval-evidence-digest` (OID 2.25.254263291653419018820250361524609646248, the SHA-256 of the pre-seal approval manifest; A-008, S1). There is no signingTime attribute.
   - **Signing.** RSA-3072 with PKCS#1 v1.5 and SHA-256, via `crypto.sign`.
   - **Key adapter.** The file-backed development key adapter reads the private key from a 0600 file path or an inherited file descriptor. It never reads it from env or argv.
 - **`src/cryptograph/worker/`.** An isolated sealing worker process. It owns key access, and its child environment carries no secrets.
