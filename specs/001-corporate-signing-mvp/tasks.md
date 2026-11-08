@@ -1,62 +1,186 @@
 # Tasks: 001 Corporate Signing MVP
 
-Status: planned; all implementation tasks intentionally unchecked. This is the only executable build checklist. OpenSpec tasks contain governance/handoff only. Paths in files are relative to the paired code worktree. Commands are planned and become available through T001; missing/skipped checks must fail, not count as success. Tier tags follow the shared rubric; no H tasks qualify in a new security-sensitive project.
+**Input**: [plan.md](plan.md) (runtime, runner contract, mode registry, governed invariants), [spec.md](spec.md), [data-model.md](data-model.md), [contracts/](contracts/), [research.md](research.md), [quickstart.md](quickstart.md).
 
-## Setup
+Status: planned. Every implementation task is intentionally unchecked. This file is the only executable build checklist; the OpenSpec tasks hold governance and handoff only.
+
+**Conventions.**
+- `files:` paths are relative to the paired code worktree.
+- Every `verify:` runs from the code tree with `PATH="$PWD/tools/node/bin:$PATH"`, after `sh scripts/fetch-node.sh` and `npm ci`.
+- Every mode used below is pre-registered by T001 in `scripts/verify-modes.mjs` (plan.md § Mode registry).
+- Tier tags follow the shared rubric. 40 tasks are `[O]` (security-sensitive, cross-module, contract or governed paths) and 1 is `[S]`. No `[H]` task qualifies.
+
+**Orchestrator checks for every task after T001.**
+1. **Freeze.** `git diff --quiet <T001-sha> HEAD -- scripts/verify.mjs scripts/verify-modes.mjs tests/tooling/verification-runner.test.mjs`. The runner, its registry and its self-test are frozen after T001, and no later task lists them.
+2. **Scope.** The task's commit touches only its `files:`.
+3. **Verify.** The task's `verify:` exits 0 and its final line reads `PASS`.
+4. **Regression.** `npm run verify -- no-secrets` and every earlier task's mode still pass.
+
+**How runner statuses are handled.**
+- `CAPABILITY_ABSENT` (exit 3) is recorded as **environment-blocked**. It is never a pass, and it never climbs the model-escalation ladder.
+- `VACUOUS`, `EVIDENCE_MISSING` and `ENV_MISMATCH` are failures.
+
+**Writer brief hygiene** (risk report § C):
+- Engineering language only.
+- Synthetic fixtures are generated programmatically.
+- Writers return summaries only: case IDs, counts and pass/fail tables, never key, token or fixture bytes.
+- The T012 oracle writer gets a fresh context. Its brief excludes `src/cryptograph/` and `src/verifier/`, and T013/T036/T037/T014 writers never edit `tests/integrity/oracle/`.
+
+## Phase 1: Setup
 
 - [ ] T001 [O] Pin Node 24.22.2 project-locally (verified tarball under gitignored `tools/`), configure TypeScript type checking (typescript 6.0.3, @types/node 24.19.2), and build the frozen fail-closed verification runner with the full mode registry and self-tests exactly as plan.md § Technical Context and § Verification runner contract specify; extend `.gitignore` as planned; replace the code-leg AGENTS.md note "No signing runtime/test commands exist yet" with the real commands and the freeze rule — files: `.gitignore`, `.node-version`, `.npmrc`, `package.json`, `package-lock.json`, `tsconfig.json`, `AGENTS.md`, `scripts/fetch-node.sh`, `scripts/verify.mjs`, `scripts/verify-modes.mjs`, `tests/tooling/verification-runner.test.mjs` — verify: `sh -c 'set -e; sh scripts/fetch-node.sh; PATH="$PWD/tools/node/bin:$PATH"; export PATH; npm ci --no-audit --no-fund; node --test tests/tooling/verification-runner.test.mjs; rc=0; npm run --silent verify -- __no_such_mode__ >/dev/null 2>&1 || rc=$?; test "$rc" -eq 2; npm run --silent verify -- tooling'`
-- [ ] T002 [O] Qualify PDF/signature/auth/storage dependencies and distribution inventory; block design on disallowed licenses or failed independent verification — files: `scripts/qualification.mjs`, `tests/qualification/`, `docs/qualification.md`, `package.json`, `package-lock.json` — verify: `npm run verify -- qualification`
+- [ ] T026 [O] Build the no-secrets gate: scan tracked and staged files (`git ls-files` plus `git diff --cached --name-only`) for private-key PEM blocks, PKCS#12/PFX content, SQLite database headers, raster or SVG images under `fixtures/`, `.env` files and known secret-name assignments; generate positive samples only at test runtime inside a temporary git repository; exit non-zero with file and rule names, never matched content (NS-01..NS-07) — files: `scripts/no-secrets.mjs`, `tests/no-secrets/` — verify: `npm run verify -- no-secrets`
+- [ ] T002 [O] Build the license inventory and SBOM tool. It classifies every npm package as `shipped` (production closure plus any asset copied into `dist/`) or `non-shipped` (devDependencies). It evaluates SPDX expressions against `scripts/license-policy.json`, which allows exactly `MIT` and `Apache-2.0`. An OR passes only when one alternative is fully allowed; an AND needs every term allowed. Missing or unknown licenses fail, and so does any extra `LICENSE*`/`NOTICE*`/`COPYING*` file inside a shipped package. It emits CycloneDX JSON to `.verify-out/`, regenerates `NOTICE`, and writes the separate platform inventory with status POLICY-PENDING: pinned Node, `ldd` of the binary, OpenSSL CLI, Chromium revision, Hermes image digest. Tests build synthetic `node_modules` trees at runtime: 0BSD, `(MIT AND Zlib)`, `BSD-3-Clause OR GPL-2.0` and BlueOak fail; MIT, Apache-2.0 and `MIT OR Apache-2.0` pass; a missing license fails; an extra asset license in a shipped package fails; a disallowed dev-only package is reported as non-shipped; platform status is always POLICY-PENDING (LI-01..LI-10) — files: `scripts/license-inventory.mjs`, `scripts/license-policy.json`, `scripts/platform-inventory.mjs`, `tests/license-inventory/`, `NOTICE`, `docs/qualification.md`, `docs/platform-inventory.md` — verify: `npm run verify -- license-inventory`
+- [ ] T027 [O] Land and qualify the complete third-party package set with exact pins. It adds playwright, at the version whose Chromium revision matches the local browser cache; the cache currently holds `chromium-1243` and `chromium-1234`. It confirms the shipped closure is empty and records the non-shipped inventory: typescript's and playwright-core's third-party notices. No later task may add a package. Tests: QL-01 shipped gate PASS; QL-02 every package.json version is exact; QL-03 the "dev bytes not in distributable" check fails on a synthetic dist that contains dev-package bytes; QL-04 browser revision matches; QL-05 install works with `ignore-scripts`. The qualification run writes the registry evidence `.verify-out/qualification/inventory.json` — files: `package.json`, `package-lock.json`, `tests/qualification/`, `docs/qualification.md` — verify: `npm run verify -- qualification`
 
-## Foundation
+## Phase 2: Foundational (blocks every user story)
 
-- [ ] T003 [O] Implement tenant-bound persistence, migrations, immutable blobs and transactional outbox with restore checks — files: `src/storage/`, `tests/storage/`, `scripts/verify.mjs` — verify: `npm run verify -- storage`
-- [ ] T004 [O] Create bounded local development composition and synthetic fixtures with no real secrets — files: `compose.yaml`, `fixtures/synthetic/`, `scripts/dev.mjs`, `tests/tooling/dev.test.mjs`, `README.md` — verify: `npm run verify -- dev`
-- [ ] T005 [O] Implement operator OIDC issuer/audience/tenant-role validation and isolate service authority — files: `src/api/auth/`, `tests/auth/`, `scripts/verify.mjs` — verify: `npm run verify -- auth`
+- [ ] T003 [O] Implement `node:sqlite` storage. Connection and transaction helpers (`BEGIN IMMEDIATE`, bounded busy timeout, tenant-filtered query helpers). Versioned migrations for **every** entity in data-model.md. The test embeds the digests of these migrations, so later tasks can only append migrations, never edit existing ones — files: `src/storage/db/`, `src/storage/schema/`, `tests/storage/` — verify: `npm run verify -- storage`
+- [ ] T028 [O] Implement the immutable, tenant-namespaced, content-addressed blob store (`tenants/<tenant>/sha256/<digest>`). Writes: temp file, fsync, rename. Reads verify the digest. No overwrite, no cross-tenant dedup. Tests BL-01..BL-04 — files: `src/storage/blobs/`, `tests/blobs/` — verify: `npm run verify -- blobs`
+- [ ] T029 [O] Implement the per-tenant audit hash chain (RFC 8785 event digests, one restricted writer), checkpoints (every 100 events and at completion), and retention/disposal with DisposalRecord and an injected clock. Completed evidence is never mutated. Tests AC-01..AC-05: chain digest, row-edit detection, truncated-tail detection, checkpoint cadence, disposal record — files: `src/storage/audit/`, `src/storage/retention/`, `tests/audit-chain/` — verify: `npm run verify -- audit-chain`
+- [ ] T030 [O] Implement the transactional outbox (stable `event_id` across delivery retries) and backup/restore. Restore verifies blob digests and audit-chain continuity, and refuses a chain head older than the last exported head. Tests OR-01..OR-04 — files: `src/storage/outbox/`, `src/storage/backup/`, `scripts/backup.mjs`, `tests/outbox-restore/` — verify: `npm run verify -- outbox-restore`
+- [ ] T004 [O] Create the deterministic synthetic fixture generators and the local dev launcher. Fixtures: multi-page and rotated-page PDFs; structural variants for malformed, encrypted-flag, already-signed, oversized and 51-page documents; synthetic identities on `.test`/`example.com` domains. No keys and no signature images. Dev launcher: binds only `127.0.0.1`, refuses non-loopback and real SMTP settings, and starts `src/server/main.ts` once it exists. A container composition is deferred, so no `compose.yaml` is created. Tests DV-01..DV-03 — files: `scripts/dev.mjs`, `scripts/gen-fixtures.mjs`, `fixtures/synthetic/documents/`, `fixtures/synthetic/identities/`, `tests/dev/`, `README.md` — verify: `npm run verify -- dev`
+- [ ] T005 [O] Implement original operator OIDC validation and authorization. Validation: pinned RS256/ES256, JWKS from configuration only, exact issuer and audience, ≤ 60 s skew; tenant and roles from configured claims. Principal kind: human-operator vs service. A service principal can never hold `sender`/`tenant_admin`. The role-by-operation matrix is a module that T034 later asserts equal to the contract's `x-opensig-role-matrix`. There is no operator browser session. Tests AU-01..AU-10 — files: `src/api/auth/`, `tests/auth/` — verify: `npm run verify -- auth`
+- [ ] T031 [O] Implement the HTTP server entrypoint and router. Router: the route registry `src/api/routes.ts`, a loopback default bind, and an optional Unix-domain-socket listener for the isolated Hermes relay. Responses and limits: streaming body limits (JSON 256 KiB, PDF 10 MiB → 413 before a full read), uniform `Error` bodies with correlation IDs, and an Origin allowlist. Security headers: CSP with no inline or eval, `frame-ancestors 'none'` (only the recipient document response allows `'self'`), `Referrer-Policy: no-referrer`, `nosniff`. Logging: a central log redactor for capability values, cookies, `Authorization`, webhook secrets and PEM blocks. Tests SEC-01..SEC-06 assert headers and grep captured logs — files: `src/server/`, `src/api/routes.ts`, `tests/server/` — verify: `npm run verify -- server`
+- [ ] T032 [O] Implement the notifications adapter. Development file spool writes 0600 files under gitignored `var/spool/`, unreadable by service principals. The SMTP adapter refuses a non-loopback relay and non-reserved recipient domains unless the owner supplies explicit pilot configuration. Per-tenant rate limit. Content is redacted: operator and service notifications never contain links or codes, and recipient mail carries the link with the invitation only in the URL fragment. Tests NT-01..NT-05 — files: `src/notifications/`, `tests/notifications/` — verify: `npm run verify -- notifications`
+- [ ] T033 [O] Implement the bounded PDF parser and the isolated parse service. Parser handles: xref tables and streams, object streams, the page tree with inherited `/Rotate` and `/MediaBox`, and detection of encryption, existing signatures, JavaScript/Launch/EmbeddedFile/RichMedia. Parser limits: nesting depth, object count, decompression ratio and total inflated bytes. Service: a child process with memory, CPU and wall-time limits, and the Node permission model with no fs-write, child-process or worker grants. Upload validation and composition both use it. Tests PL-01..PL-12, including a 10 MiB streaming cap, a 51-page rejection, rotated-page geometry, resource-limit kills and an import-boundary check that `src/pdf/` imports no `net`/`http`/`https`/`dns`/`tls`/`dgram` — files: `src/pdf/`, `tests/pdf-parse/` — verify: `npm run verify -- parser-limits`
 
-## US1
+## Phase 3: User Story 1 — Review and approve a corporate document (P1)
 
-- [ ] T006 [US1] [O] Create envelope/version/upload-limit and unsupported-PDF fixture contracts with a self-checking test harness — files: `tests/contract/envelopes.test.mjs`, `fixtures/synthetic/` — verify: `npm run verify -- envelope-contract`
-- [ ] T007 [US1] [O] Implement envelope upload/field validation/freeze/state and idempotent operators — files: `src/domain/`, `src/api/envelopes/`, `tests/domain/`, `scripts/verify.mjs` — verify: `npm run verify -- envelopes`
-- [ ] T008 [US1] [O] Implement invitation/challenge/session binding, TTL/attempt limits, CSRF and safe link viewing — files: `src/api/recipients/`, `src/api/auth/recipient-session.ts`, `tests/recipients/`, `scripts/verify.mjs` — verify: `npm run verify -- recipients`
-- [ ] T009 [US1] [O] Implement review and drawn/typed signature/date UI with exact-version consent and accessible navigation — files: `src/autograph/`, `tests/browser/review.test.mjs`, `scripts/verify.mjs` — verify: `npm run verify -- autograph`
-- [ ] T010 [US1] [O] Implement sequential approval digests, decline/expiry/void and atomic finalization reservation — files: `src/domain/`, `src/api/recipients/`, `tests/domain/approval.test.mjs`, `tests/integration/races.test.mjs` — verify: `npm run verify -- approval`
-- [ ] T011 [US1] [S] Demonstrate US1 synthetic two-recipient flow and record keyboard/mobile observations — files: `tests/browser/approval.test.mjs`, `docs/evidence/us1.md`, `scripts/verify.mjs` — verify: `npm run verify -- us1`
+**Goal:** a synthetic one- or two-recipient envelope reaches "fully approved" (`approvals_complete=true`, state `finalizing`), visibly short of completed and sealed.
 
-## US2
+**Independent test:** `us1`. A second recipient cannot approve first; neither sender nor service can approve; opening the link never approves.
 
-- [ ] T012 [US2] [O] Build independently checkable tamper/trust/revision fixtures and verifier harness before engine integration — files: `tests/integrity/`, `fixtures/synthetic/`, `scripts/verify.mjs` — verify: `npm run verify -- integrity-contract`
-- [ ] T013 [US2] [O] Implement isolated composition/sealing worker and key-adapter boundary using qualified engine — files: `src/cryptograph/`, `tests/cryptograph/`, `scripts/verify.mjs` — verify: `npm run verify -- cryptograph`
-- [ ] T014 [US2] [O] Implement granular independent verification and verified durable package completion — files: `src/cryptograph/`, `src/storage/`, `src/domain/`, `tests/integrity/`, `scripts/verify.mjs` — verify: `npm run verify -- verification`
-- [ ] T015 [US2] [O] Implement bounded retry/crash recovery, unique artifact publication and concurrent void/finalize behavior — files: `src/domain/`, `src/storage/`, `tests/recovery/`, `scripts/verify.mjs` — verify: `npm run verify -- recovery`
-- [ ] T016 [US2] [O] Implement authorized package download, sanitized receipts and redaction/access audit — files: `src/api/artifacts/`, `src/storage/`, `tests/artifacts/`, `scripts/verify.mjs` — verify: `npm run verify -- artifacts`
-- [ ] T017 [US2] [S] Record ten-flow external-verifier and performance evidence with untrusted certificate labeling — files: `tests/acceptance/sealed-package.test.mjs`, `docs/evidence/us2.md`, `scripts/verify.mjs` — verify: `npm run verify -- us2`
+- [ ] T006 [US1] [O] Create the envelope conformance harness. Vendor the spec-leg contract as `contracts/http-api.json`, with `contracts/http-api.source.json` recording `{repo, commit, path, sha256}`. Write a conformance manifest of envelope, version, upload-limit and unsupported-PDF cases with expected statuses and error codes. Add two stubs, accept-everything and reject-everything; each must fail at least one case per fixture. Kind `harness`: never SC evidence. T034 consumes the manifest with a count check — files: `contracts/http-api.json`, `contracts/http-api.source.json`, `tests/contract/envelopes/`, `fixtures/synthetic/envelopes/` — verify: `npm run verify -- envelope-contract`
+- [ ] T007 [US1] [O] Implement the envelope domain. State machine per data-model.md, including the "fully approved" mapping and the one-recipient case (`sent → finalizing`). Freeze at prepare, using RFC 8785 canonical JSON with the RFC test vectors and the manifest and recipients digests. Idempotency records. Send rules: a service-created envelope needs a single-use, digest-bound, unexpired SendConfirmation made by a human operator. Tests ST-01..ST-08 — files: `src/domain/envelopes/`, `src/domain/canonical/`, `src/storage/repositories/envelopes.ts`, `src/storage/repositories/idempotency.ts`, `src/storage/schema/`, `tests/domain/envelopes/` — verify: `npm run verify -- envelopes`
+- [ ] T008 [US1] [O] Implement the recipient ceremony. Invitations: issued as a 256-bit token, hashed, mailed through T032 with the token in the URL fragment. `requestChallenge`: a 50-bit Crockford-base32 code stored as an HMAC under a 0600 key file, a 10-minute TTL, 5 attempts per challenge, a cumulative lockout after 20 wrong codes per invitation, and a generic 202. Session: `createRecipientSession` and `readRecipientSession`, which returns every approval input, the ConsentText and the CSRF token. Plus `readRecipientDocument` (exact bytes) and `readRecipientManifest`, and `endRecipientSession`. GET, HEAD and prefetch are safe. Tests SC002-10..SC002-16, SC002-25 and CH-01..CH-03 — files: `src/api/recipients/`, `src/api/auth/recipient-session.ts`, `src/domain/consent/`, `src/storage/repositories/recipients.ts`, `src/storage/schema/`, `src/api/routes.ts`, `tests/recipients/` — verify: `npm run verify -- recipients`
+- [ ] T034 [US1] [O] Implement the operator envelope handlers. Handlers: create, read, `uploadDocument` (streamed to the T033 parse service; If-Match), prepare, preview, `confirmSend` (human only), send (mail only; no link in the response), void, reissue and `resendInvitation`. Assert T005's role matrix equals the contract's `x-opensig-role-matrix`. Generate the cross-tenant 404 matrix from the vendored contract paths, so a route without a case fails. Consume the T006 manifest with a count check. Tests SC002-07, SC002-08, SC002-23, SC002-24 and SC002-26 — files: `src/api/envelopes/`, `src/api/routes.ts`, `tests/api/envelopes/` — verify: `npm run verify -- envelope-api`
+- [ ] T010 [US1] [O] Implement approval and decline. Approval: typed field values (stroke caps, WinAnsi typed text, server-filled date), binding to the ConsentText version and digest, sequential approval digests, an exact-retry receipt, 409 on a changed retry, and 401 for operator or service credentials. Decline, plus the expiry sweeper. The atomic finalization reservation, sharing one compare-and-set path with void, decline and expiry. Tests: SC002-01..SC002-06, SC002-17, SC002-18, and races run in separate OS processes — files: `src/domain/approval/`, `src/api/recipients/approval.ts`, `src/api/recipients/decline.ts`, `src/storage/repositories/approvals.ts`, `src/storage/schema/`, `src/jobs/expiry.ts`, `src/api/routes.ts`, `tests/approval/` — verify: `npm run verify -- approval`
+- [ ] T035 [US1] [O] Implement the browser build and static serving. Build: TypeScript type stripping from `tsconfig.browser.json` into gitignored `dist/`, with no bundler and no third-party bytes. Serving: `GET /sign` and assets with the strict CSP, immutable caching and traversal-safe paths. Tests UB-01..UB-04: only original bytes in `dist/`, no inline script or style, safe static route, deterministic build digest — files: `scripts/build-ui.mjs`, `tsconfig.browser.json`, `src/server/static.ts`, `tests/ui-build/` — verify: `npm run verify -- ui-build`
+- [ ] T009 [US1] [O] Implement the review shell. Flow: read the invitation from the fragment and remove it from history, request the challenge, enter the code. Document review: the exact frozen PDF in the browser's built-in viewer, a download link and an original SVG page-outline schematic with field boxes. Consent: the exact consent text plus the organization-seal and assurance notices. Signature: drawn capture as pointer-to-vector strokes within caps, a keyboard-only typed path, and the date labeled as set by the server. Accessible names, focus order, no traps, a mobile layout. Tests AG-01..AG-06, in Chromium through playwright — files: `src/autograph/`, `tests/browser/autograph/` — verify: `npm run verify -- autograph`
+- [ ] T011 [US1] [O] Demonstrate the US1 two-recipient and one-recipient flows in Chromium. Cases: keyboard-only, mobile emulation with no horizontal overflow, consent and seal wording visible, link open/reload/prefetch with no state change, sender/service approval refused, and "fully approved" shown distinct from completed. Evidence labels name the browser engine and version and the tree digest. Tests SC004-01..SC004-04, US1-01 and US1-02 — files: `tests/acceptance/us1/`, `docs/evidence/us1.md` — verify: `npm run verify -- us1`
 
-## US3
+## Phase 4: User Story 2 — Obtain and verify a protected package (P1)
 
-- [ ] T018 [US3] [O] Implement scoped Hermes prepare/request/status/retrieve tool adapter with authorization preview — files: `src/integrations/hermes/`, `tests/integrations/hermes.test.mjs`, `scripts/verify.mjs` — verify: `npm run verify -- hermes-contract`
-- [ ] T019 [US3] [O] Implement outbox delivery with signed replay-safe callbacks and SSRF-safe registration — files: `src/integrations/webhooks/`, `src/storage/`, `tests/webhooks/`, `scripts/verify.mjs` — verify: `npm run verify -- webhooks`
-- [ ] T020 [US3] [O] Implement synthetic source-version healthcare consumers without clinical/financial mutation authority — files: `src/integrations/healthcare/`, `tests/integrations/healthcare.test.mjs`, `scripts/verify.mjs` — verify: `npm run verify -- healthcare-contracts`
-- [ ] T021 [US3] [O] Implement disabled/fake anchoring adapters and prove no real network/wallet activity — files: `src/anchoring/`, `tests/anchoring/`, `scripts/verify.mjs` — verify: `npm run verify -- anchoring-disabled`
-- [ ] T022 [US3] [O] Demonstrate actual authorized Hermes tool round trip with human approvals and healthcare harnesses — files: `tests/acceptance/consumers.test.mjs`, `docs/evidence/us3.md`, `scripts/verify.mjs` — verify: `npm run verify -- us3`
+**Goal:** from "fully approved", compose, seal, independently verify, durably store and publish exactly one package.
 
-## Release
+**Independent test:** `us2-local` produces ten verified flows. Untrusted certificates are labeled untrusted, and tampering is detected.
 
-- [ ] T023 [O] Wire build, contract, integrity, security, recovery and license checks into CI without fake pass modes — files: `.github/workflows/validate.yml`, `scripts/release-evidence.mjs`, `tests/tooling/release-gates.test.mjs`, `scripts/verify.mjs` — verify: `npm run verify -- release-gates`
-- [ ] T024 [O] Document managed key, retention, backup/restore, threat model and rollback pilot prerequisites; no deployment — files: `docs/operations.md`, `docs/threat-model.md`, `tests/operations/`, `scripts/verify.mjs` — verify: `npm run verify -- operations`
-- [ ] T025 [O] Execute full synthetic acceptance and emit source-bound release receipt; leave unavailable runtime checks failing — files: `tests/acceptance/`, `docs/evidence/acceptance.json`, `scripts/verify.mjs` — verify: `npm run verify -- acceptance`
+- [ ] T012 [US2] [O] Build the independent test oracle (fresh writer context). It assembles hand-built minimal PDFs, signs them with `openssl cms -sign` using development certificates generated at runtime in a 0600 temp directory, and implements its own ByteRange and revision structure checker. It uses `openssl cms -verify -binary -inform DER` over the ByteRange bytes. It imports nothing from `src/`. `fixtures/synthetic/integrity/` holds only structural descriptors and expected outcomes. Kind `harness`. Status: non-shipped test tool (OpenSSL CLI listed in the platform inventory). Tests OC-01..OC-08 — files: `tests/integrity/oracle/`, `fixtures/synthetic/integrity/` — verify: `npm run verify -- integrity-contract`
+- [ ] T013 [US2] [O] Implement the DER encoder and the detached CMS SignedData builder. Signed attributes: contentType, messageDigest, signingCertificateV2; no signingTime. Signing is RSA-3072 PKCS#1 v1.5 with SHA-256 through `crypto.sign`. The file-backed development key adapter takes a 0600 file or an inherited file descriptor only; env and argv are refused. Output must pass `openssl cms -verify`. Tests KEY-01 and KEY-02, plus structure cases — files: `src/cryptograph/cms/`, `src/cryptograph/keys/`, `tests/cms/` — verify: `npm run verify -- cms`
+- [ ] T036 [US2] [O] Implement the incremental-update composer, using the T033 parse service. Appearance streams: drawn strokes become vector path operators; typed text and dates use non-embedded Helvetica with WinAnsiEncoding; unsupported characters get a 422. Rotation-correct placement, widget annotations and the AcroForm signature field. The `/Sig` dictionary: `/ETSI.CAdES.detached`, `/M` labeled unsigned server time, and fixed-size `/ByteRange` and `/Contents` placeholders. Deterministic output. Tests CP-01..CP-06 — files: `src/cryptograph/compose/`, `tests/compose/` — verify: `npm run verify -- compose`
+- [ ] T037 [US2] [O] Implement the isolated sealing worker process. It receives the composed bytes and the key by file descriptor, scrubs its environment, embeds the CMS into the placeholder and reports digests. A crash or a bad key yields a retryable error code, with no partial artifact and no secret in any message. Tests WK-01..WK-04 — files: `src/cryptograph/worker/`, `tests/cryptograph/` — verify: `npm run verify -- cryptograph`
+- [ ] T014 [US2] [O] Implement the shipped product verifier as a separate module. It has its own ByteRange locator and DER decoder, parses certificates with `crypto.X509Certificate`, and evaluates trust against configured anchors. Its report carries the integrity, trust, revision_coverage, timestamp `absent` and revocation `not-checked` fields, plus the exact-artifact digest. It must agree with the T012 oracle on the whole oracle corpus and on product-sealed output, with a count check. Tests: VB-01 (it imports only `node:*` and `src/verifier/**`) and SC002-19..SC002-22 — files: `src/verifier/`, `tests/integrity/product/` — verify: `npm run verify -- verification`
+- [ ] T038 [US2] [O] Implement verified durable completion. The finalization runner takes a lease and fencing token and runs compose → seal → verify (`src/verifier/`) → store the PDF and evidence (T028). Publish is a compare-and-set on state, version and current fencing token, inserting the artifact and the outbox event in the same transaction. `retryFinalization` is allowed only from retryable or failed. Tests FEN-01..FEN-03 — files: `src/domain/finalization/`, `src/jobs/finalize.ts`, `src/api/envelopes/retry.ts`, `src/storage/repositories/artifacts.ts`, `src/storage/repositories/jobs.ts`, `src/storage/schema/`, `src/api/routes.ts`, `tests/completion/` — verify: `npm run verify -- completion`
+- [ ] T015 [US2] [O] Implement bounded retry and crash recovery, and prove it with 20 scripted cases. Each case runs in a separate OS process: a SIGKILL or a barrier at each named phase (reserve, compose, seal, verify, store PDF, store evidence, publish, outbox), plus void, decline, expiry, operator retry while running and stale-lease races. The fault-injection hook is active only when the test harness starts the process with an explicit flag. Invariants: one artifact, one event, never both completed and voided, bounded attempts. Tests SC003-01..SC003-20 — files: `src/jobs/`, `src/domain/finalization/`, `src/storage/repositories/jobs.ts`, `tests/recovery/` — verify: `npm run verify -- recovery`
+- [ ] T039 [US2] [S] Implement an original deterministic ZIP writer. Store method only, `zlib.crc32`, sorted entries, fixed 1980-01-01 timestamps, UTF-8 name flag, no ZIP64 (inputs stay under the limits). Round-trip tests read the output with an independent minimal reader written in the test — files: `src/artifacts/zip.ts`, `tests/zip/` — verify: `npm run verify -- zip`
+- [ ] T016 [US2] [O] Implement artifact retrieval and package assembly. Operations: `readVerification`, `downloadFinalPdf` and `downloadPackage`, with ETags equal to the digests and 409 `not_completed` before completion. The package holds final.pdf, approval-manifest.json, audit-receipt.json (including the chain head), verification.json and package-index.json. Each is validated against the vendored contract schemas and cross-linked by digests, and none contains a capability value or key. Access is audited. Tests SC002-09 and PK-01..PK-04 — files: `src/api/artifacts/`, `src/artifacts/package.ts`, `src/api/routes.ts`, `tests/artifacts/` — verify: `npm run verify -- artifacts`
+- [ ] T017 [US2] [O] Record ten consecutive local flows (mixed one and two recipients). In every flow, the approval's `document_digest` equals the hash of the bytes the browser received. Each flow records the product verification, the oracle result and the package digest. Indicative-local timing: navigation p95 and finalization max ≤ 60 s for n=10 concurrent. The external PDF reader and declared hardware stay OPEN. Tests SC001-01..SC001-10, SC005-01 and SC005-02 — files: `tests/acceptance/us2/`, `docs/evidence/us2.md` — verify: `npm run verify -- us2-local`
 
-## Dependencies and independent acceptance
+## Phase 5: User Story 3 — Hermes and shared consumer contracts (P2)
 
-T001 -> T002 -> T003..T005 -> US1 T006..T011 -> US2 T012..T017 -> US3 T018..T022 -> release T023..T025. T006 and T012 qualify fixture/harness behavior independently; they do not claim the missing API or signing engine works. Full handler/engine acceptance remains in T007 and T013..T017. A passing fixture self-check cannot satisfy runtime acceptance. US1 is independently demonstrable human approval but must not claim sealed completion; the releasable signing MVP requires US1 and US2. Feature acceptance also requires US3 and cross-cutting gates.
+**Goal:** real Hermes v0.23.0 tool dispatch completes a synthetic, human-approved flow, and the healthcare harnesses enforce source-version binding.
 
-After T005 and stable contracts, independent work may prepare US1 browser fixtures and US2 tamper fixtures. After T017, Hermes adapter, healthcare harness and disabled anchoring work can proceed in separate files, but do not concurrently edit the shared verifier dispatcher. No P markers authorize overlapping writes. The default execution is sequential.
+**Independent test:** `us3`, isolated local Hermes with a scripted model. `us3-real-model` is a supplementary run.
+
+- [ ] T018 [US3] [O] Implement the Hermes integration. `src/integrations/hermes/mcp-server.mjs`: a dependency-free stdio JSON-RPC MCP server that runs on Node ≥ 24, including the Hermes image's Node. It advertises exactly `prepare_envelope`, `request_signatures`, `get_status` and `retrieve_completed_package`, with no approve, decline, session, confirmation, callback, void, retry or key tool. It relays to the openSig API using a synthetic service credential. The adapter validates the preview digests. `request_signatures` requires an `authorization_reference`, and no tool result contains a capability value. Kind `contract`. Tests HM-01..HM-06 — files: `src/integrations/hermes/`, `tests/integrations/hermes/` — verify: `npm run verify -- hermes-contract`
+- [ ] T019 [US3] [O] Implement webhooks. Registration and key rotation/revocation handlers, for human tenant administrators only. Destination policy: HTTPS plus an allowlist. Private, loopback, link-local, metadata, IPv4-mapped and alternate-form addresses are rejected at registration and at every connection: resolve once, validate every A/AAAA record, connect to that address with SNI, follow no redirects, ignore proxy environment variables. Tests use an injected resolver and connector only. Signing: HMAC-SHA256 over `<timestamp>.<raw body>` with the key ID header and overlap rotation. The secret is shown once and encrypted at rest. Outbox delivery keeps a stable `event_id`. Tests WH-01..WH-08 — files: `src/integrations/webhooks/`, `src/api/webhooks/`, `src/storage/repositories/webhooks.ts`, `src/storage/schema/`, `src/api/routes.ts`, `tests/webhooks/` — verify: `npm run verify -- webhooks`
+- [ ] T020 [US3] [O] Implement the synthetic openChart and openPractice harness consumers. Each fetches canonical status with its own credential, checks tenant mapping and source version, treats a duplicate as a no-op and rejects stale versions. Neither exposes any clinical-attestation or financial-action surface. Kind `contract`. Tests HC-01..HC-04 — files: `src/integrations/healthcare/`, `tests/integrations/healthcare/` — verify: `npm run verify -- healthcare-contracts`
+- [ ] T021 [US3] [O] Implement the disabled and fake anchoring adapters and wire `anchor_status`. A fake failure never alters completion. A preloaded network guard on `net`, `dns`, `http` and `fetch` logs every connection attempt, and the log must be empty. Tests AN-01..AN-03 — files: `src/anchoring/`, `src/domain/envelopes/anchor-status.ts`, `tests/anchoring/` — verify: `npm run verify -- anchoring-disabled`
+- [ ] T040 [US3] [O] Provision the isolated local Hermes harness. Image: the exact image `docker.io/nousresearch/hermes-agent@sha256:adb7890916de63245523492be8f68f9d2095fecbec4e2a6dab7960381f0fc002`, never pulled. Container: run with `--init --network none` and a tmpfs Hermes home. The config is generated per run from a template, with `mcp_servers.opensig` and `tools.include` set to exactly the four tools. Model and transport: a dependency-free scripted OpenAI-compatible endpoint runs inside the container. The MCP relay reaches the host openSig over a mounted Unix socket. Guards: a preflight refuses non-loopback or production endpoints, any `kubectl` and any production config path. Probe: `scripts/capabilities/hermes-runtime.mjs` exits 0 only when the Docker daemon and that local image are present. Tests HR-01..HR-03 — files: `fixtures/hermes/`, `scripts/hermes-local.mjs`, `scripts/capabilities/hermes-runtime.mjs`, `tests/hermes-runtime/` — verify: `npm run verify -- hermes-runtime`
+- [ ] T022 [US3] [O] Demonstrate SC-006 through the isolated local Hermes. Run: a scripted-deterministic model drives prepare → (human `confirmSend`) → request → status → retrieve, in both `tool_search` modes. Recipients approve in Chromium through the recipient session, and a Hermes approval attempt is refused. Both healthcare harnesses run, as do disabled and fake-failing anchoring. Evidence labels: `hermes_runtime=isolated-local`, `hermes_upstream`, `hermes_version=v0.23.0`, `network=none`, `provider=scripted-deterministic`, `tool_search`, `production_hermes=not-exercised`, `notification=local-spool`. Production Hermes is never contacted. Without the capability the run reports CAPABILITY_ABSENT. Tests SC006-01..SC006-09 — files: `tests/acceptance/us3/`, `fixtures/hermes/scenarios/`, `docs/evidence/us3.md` — verify: `npm run verify -- us3`
+- [ ] T041 [US3] [O] Attempt the supplementary real-model run. Setup: the same pinned Hermes image points at a host-side OpenAI-compatible adapter. The adapter forwards chat completions to the existing authorized max001 Claude SDK transport, adds no npm dependency, and keeps credentials only in the host process: never in the container, config, logs or evidence. Evidence labels: `provider=claude-sdk-max001-local`, `credentials=host-only`, `production_hermes=not-exercised`. If the transport or container-to-host networking is missing, the probe reports CAPABILITY_ABSENT. The scripted `us3` run remains the recorded evidence. Tests RM-01..RM-04 — files: `scripts/real-model-adapter.mjs`, `scripts/capabilities/claude-sdk-transport.mjs`, `tests/acceptance/us3-real-model/`, `docs/evidence/us3-real-model.md` — verify: `npm run verify -- us3-real-model`
+
+## Phase 6: Release and cross-cutting
+
+- [ ] T023 [O] Wire the code-leg CI as `.github/workflows/ci.yml`, never `validate.yml`, which is digest-pinned in the assembly. Actions are pinned by full SHA, and their licenses are inventoried. The pinned runtime comes from `scripts/fetch-node.sh`. Jobs run `npm ci`, `all-unit`, `no-secrets`, `license-inventory` and the openssl/chromium modes. The CI profile lists the excluded capability modes by name. The test forbids `continue-on-error`, `|| true`, `pull_request_target` and any `secrets.` use. The receipt writer binds results to the tree digest. Real CI evidence stays OPEN until a PR run. Tests RG-01..RG-06 — files: `.github/workflows/ci.yml`, `scripts/release-evidence.mjs`, `tests/release-gates/` — verify: `npm run verify -- release-gates`
+- [ ] T024 [O] Document the pilot prerequisites and rollback, with no deployment. Documents: managed key custody, retention, backup/restore, and a threat model written as a table of assets, boundaries and controls mapped to registered case IDs. Tests: OP-01 runs a backup-restore drill, OP-02 detects a corrupted blob on restore, and OP-03 checks that every control maps to a registered case ID — files: `docs/operations.md`, `docs/threat-model.md`, `tests/operations/` — verify: `npm run verify -- operations`
+- [ ] T025 [O] Execute local synthetic acceptance and commit the tree-bound receipt. The run covers every local component mode, and the SC case union must be complete. The receipt records `release_ready: false` and lists as OPEN: the external PDF reader, declared hardware, the CI run, the platform inventory (POLICY-PENDING), the trusted certificate, real OIDC/SMTP and production Hermes. Any absent local capability yields CAPABILITY_ABSENT (environment-blocked) — files: `docs/evidence/acceptance.json`, `docs/evidence/acceptance.md`, `scripts/release-evidence.mjs` — verify: `npm run verify -- acceptance-local`
+
+## Dependencies and execution order
+
+The default execution is strictly sequential in the order listed, with one writer per code worktree. No `[P]` marker appears. Two dependency rules span the whole list: no package is added after T027, and the runner is frozen after T001.
+
+**Phase 1.** T001 → T026 → T002 → T027.
+
+**Phase 2.**
+- Blob store, then audit chain, then outbox and restore: T003 → T028 → T029 → T030.
+- Fixtures and dev launcher, then auth, then server, then notifications: T004 → T005 → T031 → T032.
+- The parse service needs the T004 fixtures: T033.
+
+**US1** (needs phase 2).
+- T006 → T007 → T008. The ceremony needs the envelope domain and notifications.
+- T034 needs T007, T008, T031 and T033.
+- T010 needs T008 and T034.
+- T035 needs T031.
+- T009 needs T010 and T035, so the approval API exists before the UI.
+- T011 needs all of the above.
+
+**US2** (needs T010).
+- T012 comes first, written independently.
+- T013 → T036 (needs T033) → T037.
+- T014 needs T012 and T037 output.
+- T038 needs T014 and T028–T030.
+- T015 needs T038.
+- T039 → T016 (needs T038 and T029).
+- T017 needs all of the above plus T009.
+
+**US3** (needs US2).
+- T018 needs T034.
+- T019 needs T030.
+- T020 needs T016.
+- T021.
+- T040 needs T018 and T031's socket listener.
+- T022 needs T040, T020, T021 and T009.
+- T041 needs T040.
+
+**Release.** T023 needs T026, T002 and T027. T024 needs T030. T025 runs last.
+
+**Story independence.** US1 is independently demonstrable human approval but must not claim sealed completion. The releasable signing MVP requires US1 and US2. Feature acceptance also requires US3 and the cross-cutting gates.
+
+**Harnesses and fixtures.** T006 and T012 are harnesses and never count as runtime acceptance. Handler and engine acceptance lives in T034 and T013/T036/T037/T014/T038.
+
+**Capability-gated modes.**
+- `autograph`, `us1`, `us2-local` and `us3` need chromium.
+- `integrity-contract`, `cms`, `verification` and `us2-local` need openssl.
+- `hermes-runtime`, `us3` and `us3-real-model` need hermes-runtime.
+- `us3-real-model` also needs claude-sdk-transport.
+- The external gates in `acceptance` are not task verifies.
+
+## Implementation strategy
+
+1. Finish setup and foundation first: the runtime, the gates and the isolated parser.
+2. Stop at US1 to demonstrate "fully approved" without sealing.
+3. Complete US2 for the signing MVP.
+4. Add US3, then the release gates.
 
 ## Traceability
 
-FR-001: T003,T005,T007,T008,T016; FR-002: T002,T006,T007; FR-003: T007,T009,T010; FR-004: T005,T008,T010; FR-005: T012,T013,T014,T016; FR-006: T012,T014,T017; FR-007: T003,T007,T010,T015,T019; FR-008: T016,T024; FR-009: T018,T019,T020,T022; FR-010: T021,T022; FR-011: T001,T002,T023; FR-012: T011,T012,T015,T017,T022,T024,T025.
+**Functional requirements.**
+- FR-001: T003, T005, T008, T010, T016, T019, T034
+- FR-002: T006, T007, T033, T034
+- FR-003: T007, T008, T009, T010, T035
+- FR-004: T005, T008, T010, T032, T034
+- FR-005: T012, T013, T014, T016, T036, T037, T038
+- FR-006: T012, T014, T017, T036
+- FR-007: T003, T007, T010, T015, T019, T030, T038
+- FR-008: T016, T024, T029, T031, T039
+- FR-009: T018, T019, T020, T022, T040, T041
+- FR-010: T021, T022
+- FR-011: T001, T002, T023, T026, T027
+- FR-012: T011, T012, T014, T015, T017, T022, T024, T025, T029, T030
 
-SC-001: T017; SC-002: T006,T008,T012,T014; SC-003: T015; SC-004: T009,T011; SC-005: T017,T025; SC-006: T022; SC-007: T002,T023,T025.
+**Success criteria.**
+- SC-001: T017
+- SC-002: T008, T010, T014, T016, T034 (catalog SC002-01..SC002-26)
+- SC-003: T015
+- SC-004: T009, T011
+- SC-005: T017 (indicative-local); declared hardware OPEN in T025
+- SC-006: T022 (primary), T018, T020, T021, T040, T041 (supplementary)
+- SC-007: T002, T023, T025, T026, T027
+
+**Task count.** 41 in total: Setup 4, Foundational 9, US1 8, US2 10, US3 7, Release 3.
 
 ## Landing obligation
 
-After implementation, reconcile these spec artifacts against tested behavior, obtain leg reviews and land matching assembly pins. Do not archive from documentation completion. Any accepted bounded amendment updates the working spec/plan/tasks immediately and uses the shared reconciliation issue protocol. Wider identity, licensing, live ledger or healthcare deployment changes require full governance first.
+After implementation, reconcile these spec artifacts against tested behavior, obtain leg reviews and land matching assembly pins. Do not archive because documentation is complete. Any accepted bounded amendment updates the working spec/plan/tasks immediately and uses the shared reconciliation issue protocol. Wider identity, licensing, live ledger or healthcare deployment changes require full governance first.

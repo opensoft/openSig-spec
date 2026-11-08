@@ -200,7 +200,7 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 | `release-gates` | T023 | unit | `tests/release-gates/**/*.test.mjs` | 10 | RG-01..RG-06 | — | — |
 | `operations` | T024 | unit | `tests/operations/**/*.test.mjs` | 6 | OP-01..OP-03 | — | — |
 | `all-unit` | (npm test) | aggregate | components: every `unit`, `harness` and `contract` mode without capabilities | — | — | — | — |
-| `acceptance-local` | T025 | aggregate | components: every mode above except `tooling` and `us3-real-model`, in task order | — | union must cover SC001-*, SC002-01..SC002-26, SC003-*, SC004-*, SC005-*, SC006-* | openssl, chromium, hermes-runtime | `.verify-out/acceptance-local/receipt.json` with `release_ready: false` and external gates OPEN; committed `docs/evidence/acceptance.json` with the same tree digest |
+| `acceptance-local` | T025 | aggregate | components: every mode above except `tooling`, `us3-real-model` and `all-unit`, in task order | — | union must cover SC001-*, SC002-01..SC002-26, SC003-*, SC004-*, SC005-*, SC006-* | openssl, chromium, hermes-runtime | `.verify-out/acceptance-local/receipt.json` with `release_ready: false` and external gates OPEN; committed `docs/evidence/acceptance.json` with the same tree digest |
 | `acceptance` | (release gate) | release | components: `acceptance-local` plus external gates `external-pdf-reader`, `declared-hardware`, `ci-run`, platform inventory (POLICY-PENDING), trusted certificate, real OIDC/SMTP | — | — | external-pdf-reader, declared-hardware, ci-run | receipt with every gate closed; FAIL while any is OPEN |
 
 `typecheck: true` applies to every non-aggregate mode, `tooling` included, which proves the TypeScript pin and tsconfig work. Each aggregate typechecks once.
@@ -324,21 +324,43 @@ dist/, var/, .verify-out/ gitignored build output, local data and run evidence
 
 ## Governed invariants
 
-- `src/domain/` — approval/version/state transitions and tenant isolation.
-- `src/api/auth/` — operator/recipient/service authority.
-- `src/cryptograph/` — key custody, verification and completion integrity.
-- `src/storage/` — durable evidence and exactly-once publication.
-- `src/integrations/` — domain authority and notification permissions.
+Each entry names a path and what an edit there moves. Every listed path is `[O]` work. `.github/workflows/`, `openspec/` text, and any file that records a pin, digest or measured value are governed in every repository.
+
+- `src/domain/` — approval/version/state transitions, consent binding, finalization reservation and tenant isolation.
+- `src/api/auth/` — operator/recipient/service authority and the role-by-operation matrix.
+- `src/api/envelopes/` — send confirmation for service-created envelopes, void/reissue/retry authority.
+- `src/api/recipients/` — the human approval handler, challenge/session binding and CSRF.
+- `src/api/artifacts/` — authorized evidence retrieval and redaction.
+- `src/api/webhooks/` — callback registration authority and key issuance.
+- `src/server/` — security headers, input limits, origin checks and central log redaction.
+- `src/notifications/` — outbound mail guard; links reach recipients only.
+- `src/pdf/` — hostile-input parsing limits and isolation.
+- `src/cryptograph/` — key custody, composition and the seal.
+- `src/verifier/` — the shipped verifier and its import boundary.
+- `src/jobs/` — finalization lease/fencing and expiry.
+- `src/storage/` — durable evidence, append-only migrations, the audit chain and exactly-once publication.
+- `src/autograph/` — consent wording, assurance and seal notices shown to humans.
+- `src/integrations/` — domain authority, the Hermes tool surface and notification permissions.
 - `src/anchoring/` — privacy and no real ledger activity.
-- `package-lock.json` — pinned dependency inventory.
 - `package.json` — dependency set, engines pin and the npm script surface the gates use.
+- `package-lock.json` — pinned dependency inventory.
 - `.node-version` — pinned runtime version.
+- `.npmrc` — install policy (engine-strict, exact pins, no install scripts).
 - `scripts/fetch-node.sh` — runtime provenance: embedded tarball digest and release-key fingerprints.
 - `scripts/verify*.mjs` — the frozen gate engine and mode registry (frozen after T001).
 - `tests/tooling/verification-runner.test.mjs` — the gate's own self-test (frozen after T001).
+- `scripts/license-inventory.mjs`, `scripts/license-policy.json`, `scripts/platform-inventory.mjs` — the license allowlist gate and platform inventory.
+- `scripts/no-secrets.mjs` — the secret-hygiene gate.
+- `scripts/release-evidence.mjs` — the tree-bound receipt.
+- `scripts/capabilities/` — capability probes that decide environment-blocked versus run.
+- `contracts/` — the vendored contract copy and its source digest.
+- `fixtures/synthetic/` — synthetic-only test data (no keys, PHI or signature images).
+- `fixtures/hermes/` — isolated Hermes configuration (no production endpoints or credentials).
+- `NOTICE` — retained third-party notices.
+- `docs/evidence/` — measured acceptance values.
 
 ## Delivery and Landing
 
-T001 establishes the pinned runtime, the type check and the frozen runner. T026 (no-secrets) and T002/T027 (inventory and qualification) must pass before anything builds on dependencies. US1 delivers human approval visibly short of sealed completion. US2 completes the signing MVP. US3 proves Hermes reuse and the healthcare contracts. Run synthesis/security/recovery acceptance before claiming the whole feature complete. Keep every implementation task unchecked until it is executed.
+T001 establishes the pinned runtime, the type check and the frozen runner. T026 (no-secrets) and T002/T027 (inventory and qualification) must pass before any work that builds on dependencies. After T027 no package may be added. A container composition (`compose.yaml`) is deferred: the dev launcher is a Node script bound to loopback. US1 delivers human approval visibly short of sealed completion. US2 completes the signing MVP. US3 proves Hermes reuse and the healthcare contracts. Run synthesis/security/recovery acceptance before claiming the whole feature complete. Keep every implementation task unchecked until it is executed.
 
 The feature branches depend on foundation PRs openSig#1, openSig-spec#1 and openSig-code#1. A stacked spec PR targets the spec foundation branch until it lands. The code worktree exists but contains no new implementation. Do not create an empty implementation PR. After actual implementation, review and land both legs, advance the matching assembly pins on the feature branch, and only then archive. No assembly feature pin is advanced by this planning work.
