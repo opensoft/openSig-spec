@@ -2,7 +2,7 @@
 
 Feature: [spec.md](../spec.md). All items below remain unexecuted implementation/release gates.
 
-- [ ] Complete SBOM/notice/allowlist qualification including assets, native/runtime and image contents.
+- [ ] Complete SBOM, notice and strict MIT/Apache allowlist qualification of application artifacts: distributed code, libraries, bundled assets and transitive application dependencies. Record the separate platform inventory: Node runtime and embedded components, OS/base image, browser, JVM. Platforms are not held to the allowlist (owner decision 2026-11-08).
 - [ ] Prove sender/recipient/service authority, CSRF, TTL/attempt limits and tenant isolation.
 - [ ] Prove exact-version consent, sequential approval and no signature from link viewing.
 - [ ] Qualify supported PDF corpus and parser isolation/resource limits.

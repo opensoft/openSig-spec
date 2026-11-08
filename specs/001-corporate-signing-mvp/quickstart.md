@@ -24,7 +24,7 @@ npm ci
 npm run verify -- <mode>                 # one mode from plan.md § Mode registry; read the final status line
 npm test                                 # = verify -- all-unit (unit, harness and contract modes without capabilities)
 npm run verify -- acceptance-local       # local synthetic acceptance (T025); release_ready:false while any gate is OPEN
-npm run verify -- acceptance             # release gate only; FAILS while any gate is OPEN or POLICY-PENDING; no task uses it
+npm run verify -- acceptance             # release gate only; FAILS while any gate is OPEN; no task uses it
 ```
 
 **How to read exit codes.**
@@ -97,10 +97,11 @@ The release gate `acceptance` stays failing until all of these are closed with e
 - an external PDF reader check;
 - declared pilot hardware timing;
 - a real CI run;
-- the owner's decision on platform license scope (POLICY-PENDING in plan.md), followed by the platform/image inventory;
 - an approved trusted certificate and key custody;
 - validated OIDC and SMTP;
 - configured retention;
 - owner-authorized environment and notifications.
+
+The platform license question is resolved by the owner (plan.md). Platforms are inventoried separately (`docs/platform-inventory.md`) and are not a release gate; the application gate stays strict.
 
 Production deployment, live healthcare integration and blockchain need separate, later authorization.

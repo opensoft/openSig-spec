@@ -15,6 +15,7 @@
 - Q: What consent evidence is persisted: the version label, or the wording? → A: The exact wording. Consent text is an immutable, versioned entity with a SHA-256 text digest. Each approval binds both `consent_version` and `consent_text_digest`, and the approval manifest in the package carries the full text. Governing principle: P2 (preserve exact-version consent evidence).
 - Q: What does "fully approved" mean in the state model, including the one-recipient case? → A: `approvals_complete = true`, meaning every required approval is recorded. In the same transaction the envelope moves to `finalizing`, and only verified durable output moves it to `completed`. A one-recipient envelope goes `sent → finalizing` on its single approval. `in-progress` exists only between the first and last approvals of a two-recipient envelope. "Fully approved" is never shown as completed or sealed. Governing principle: P3 (verify before completion; separate human authority from certificate integrity).
 - Q: Who supplies the value of a date field? → A: The server, from server UTC time at approval, labeled unsigned server time. Clients submit no date value. Governing principles: P2 (exact approval evidence) and P3 (a server time is never presented as a trusted timestamp).
+- Q: Do pre-existing platforms (Node runtime and embedded components, OS/base image, browser, JVM) fall under the MIT/Apache allowlist? → A: No. The owner decided on 2026-11-08: "MIT/Apache application and libraries; inventory platform licenses separately". Application artifacts are strictly MIT/Apache with no waiver; platforms are inventoried separately. Governing principle: P1 (allowlist for shipped third-party materials; no silent exceptions), applied as the owner scoped it.
 - Q: How are typed signatures and dates rendered without shipping a font file? → A: In standard-14 Helvetica, which is not embedded. Characters outside WinAnsiEncoding are rejected (422 `unsupported_characters`). Governing principle: P1 (no third-party font asset ships outside the MIT/Apache allowlist).
 
 ## User Scenarios & Testing
@@ -79,7 +80,7 @@ Void versus approval/finalization races; duplicate idempotency key with changed 
 - **FR-008**: Retrieve authorized final PDF, approval manifest, audit receipt and verification report without exposing other tenants, signing secrets or tokens in logs/notifications.
 - **FR-009**: Support bounded Hermes preparation/request/status/retrieval and synthetic openChart/openPractice version-bound contracts; completion cannot attest clinical facts or execute financial actions.
 - **FR-010**: Keep anchoring disabled or fake only in MVP; no real wallet/fees/network submission; fake receipts explicitly say non-ledger.
-- **FR-011**: Use Apache-2.0 for original materials and fail release on unknown/disallowed third-party licenses, including transitive assets and release-image inventory; preserve notices.
+- **FR-011**: Use Apache-2.0 for original materials. Fail release on any unknown or disallowed license among application artifacts: distributed code, libraries, bundled assets and transitive application dependencies, which must all be MIT or Apache-2.0, with no waiver. Inventory pre-existing platforms separately: the Node runtime binary and its embedded components, the OS/base image, the browser and any JVM. Platforms are not required to be MIT/Apache-only. Preserve notices.
 - **FR-012**: Demonstrate independent verification, tamper detection, tenant/session/replay protection, worker recovery, evidence retention controls and backup/restore using synthetic fixtures before pilot acceptance.
 
 ### Key Entities
@@ -94,7 +95,7 @@ Tenant; Envelope; DocumentRevision; FieldDefinition; FieldManifest; Recipient; C
 - **SC-004**: A user completes review/approval on keyboard-only and mobile layouts, with consent and organization-seal wording visible; no signature action occurs from opening a link alone.
 - **SC-005**: In the declared single-instance pilot environment, 95% of status/review navigation operations finish within 2 seconds and supported finalization within 60 seconds across 10 concurrent envelopes; report hardware, PDF sizes and measurement separately from authentication/email delay.
 - **SC-006**: One actual Hermes-mediated flow and both synthetic healthcare consumer harnesses pass; signing still completes with anchoring disabled/failing fake adapter.
-- **SC-007**: Every distributed artifact has a passing license inventory and provenance receipt; no real PHI, signatures or keys enter Git/test fixtures.
+- **SC-007**: Every distributed application artifact has a passing MIT/Apache license inventory and a provenance receipt. A separate platform inventory is recorded. No real PHI, signatures or keys enter Git or test fixtures.
 
 ## Assumptions and Scope
 

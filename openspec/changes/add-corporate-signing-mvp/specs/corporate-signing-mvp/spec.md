@@ -43,8 +43,12 @@ Ordinary signing SHALL work with anchoring disabled. MVP SHALL provide only disa
 - **THEN** signing completes normally and no real ledger proof is claimed
 
 ### Requirement: License and release evidence
-All original materials SHALL use Apache-2.0. Every shipped third-party artifact SHALL pass the MIT/Apache allowlist with retained notices and an SBOM. Release SHALL require source-bound signing, trust, isolation and recovery acceptance evidence.
+All original materials SHALL use Apache-2.0. Every application artifact SHALL pass the MIT/Apache allowlist with retained notices and an SBOM, with no waiver: distributed code, libraries, bundled assets and transitive application dependencies. Pre-existing platforms SHALL be inventoried separately with their licenses and SHALL NOT be required to be MIT/Apache-only: the Node runtime binary and its embedded components, the OS/base image, the browser and any JVM. Release SHALL require source-bound signing, trust, isolation and recovery acceptance evidence.
 
-#### Scenario: Disallowed artifact
-- **WHEN** a transitive package, asset or release-image component has an unknown or disallowed license
-- **THEN** the release gate fails without changing the policy or silently waiving the artifact
+#### Scenario: Disallowed application artifact
+- **WHEN** a transitive application dependency, library or bundled asset has an unknown or disallowed license
+- **THEN** the release gate fails without changing the policy or waiving the artifact
+
+#### Scenario: Platform component
+- **WHEN** a pre-existing platform component (for example a library embedded in the Node runtime binary, or an OS package) carries a non-MIT/Apache license
+- **THEN** it is recorded in the separate platform inventory, and the application license gate is unaffected

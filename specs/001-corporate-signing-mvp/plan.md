@@ -52,11 +52,16 @@ Deliver one corporate signing flow with openAutograph human approval and an open
 
 **Evidence.** Versioned evidence records the tree digest, the lockfile/SBOM digest, the environment and artifact digests. No build command is claimed available until its implementation task creates it.
 
-## Pending owner decision: platform license scope
+## Owner decision: platform license scope (resolved 2026-11-08)
 
-**Status: POLICY-PENDING.** Not resolved or reinterpreted here.
+**Decision (owner, verbatim, 2026-11-08):** "MIT/Apache application and libraries; inventory platform licenses separately". It is tracked in reconciliation issue opensoft/openSig-spec#3, and FR-011, SC-007 and the OpenSpec license requirement now state it.
 
-FR-011 says: "fail release on unknown/disallowed third-party licenses, including transitive assets and release-image inventory". That wording is kept unchanged. The open question is whether pre-existing platforms (OS, Node runtime, JVM, browser) are inventoried separately or fall under the literal MIT/Apache allowlist. The conflict, from the 2026-11-08 feasibility review (section E):
+- **Application artifacts** are held to a strict MIT/Apache-2.0 allowlist with no waiver: distributed code, libraries, bundled assets (fonts, cmaps, wasm and the like) and transitive application dependencies.
+- **Pre-existing platforms** are inventoried separately with their own licenses, and are **not** required to be MIT/Apache-only: the Node runtime binary and its embedded components, the OS/base image, the browser, any JVM, and test-time platform tools.
+
+The decision closes this question only. It closes no deployment, trust, real-CI, production-Hermes or real-model gate.
+
+**History: the conflict as recorded before the decision.** FR-011 then said: "fail release on unknown/disallowed third-party licenses, including transitive assets and release-image inventory". The open question was whether pre-existing platforms (OS, Node runtime, JVM, browser) are inventoried separately or fall under the literal MIT/Apache allowlist. The conflict, from the 2026-11-08 feasibility review (section E), is retained here as the platform inventory's starting content:
 
 - **Inside the Node binary:** V8 (BSD-3-Clause); ICU (Unicode-3.0 plus older ICU/BSD texts); zlib (Zlib); zstd (BSD); ittapi and inspector_protocol (BSD); SipHash (CC0); HdrHistogram (BSD-2/CC0); minimatch (BlueOak-1.0.0); rimraf and node-heapdump (ISC).
 - **In the binary but not covered by its `LICENSE`:** SQLite (public-domain blessing), which this plan uses as `node:sqlite`, and 116 root CA certificates (provenance unverified).
@@ -65,11 +70,11 @@ FR-011 says: "fail release on unknown/disallowed third-party licenses, including
 - **A typical base image:** ca-certificates (MPL-2.0/GPL-2+) and tzdata (public domain).
 - **Test-time tools:** the Playwright Chromium build (BSD and others) and the OpenSSL CLI (Apache-2.0), plus the isolated Hermes runtime. These are not shipped, but they are named in the platform inventory too.
 
-**Handling.**
+**Handling under the decision.**
 
-- **Application gate (strict, must pass).** The application-dependency gate covers the shipped npm closure plus every bundled asset copied into a distributable. It is strict and must actually pass for everything the code ships (T002/T027).
-- **Platform inventory.** A separate inventory records the pinned Node runtime, linked system libraries, browser and CLI tools with status `POLICY-PENDING`.
-- **Release gate.** The release gate (`acceptance` mode, SC-007's release-image inventory, checklists/security-release.md item 1) stays failing/OPEN until the owner decides. No waiver is requested, and no task may mark it passed.
+- **Application gate (strict, must pass).** The application-dependency gate covers the shipped npm closure plus every bundled asset copied into a distributable. It is strict, it has no waiver, and it must actually pass for everything the code ships (T002/T027; T035 build provenance).
+- **Platform inventory.** A separate inventory (`scripts/platform-inventory.mjs`, `docs/platform-inventory.md`) records with status `INVENTORIED`: the pinned Node runtime and its embedded components, linked system libraries, the browser revision, the OpenSSL CLI and the Hermes image. Platform entries never affect the application gate.
+- **Release gate.** The platform question no longer blocks release; amendment A-007 removes that gate from the runner. The release gate (`acceptance` mode) still fails on its six other open gates, and no task may mark any of them passed.
 - **Dev/test tools.** npm `devDependencies` are inventoried with full license data, labeled `non-shipped`, and the release build proves they contribute no bytes to the distributable. TypeScript 6.0.3 itself carries third-party notices (DefinitelyTyped MIT, Unicode, W3C, CC-BY-4.0 in its `lib` files; measured in `ThirdPartyNoticeText.txt`). It is a build tool, not an application dependency; this is recorded for the owner, not waived.
 
 ## Verification runner contract (frozen by T001)
@@ -302,7 +307,7 @@ Both are labeled `indicative-local`. The declared pilot hardware stays an OPEN g
 Planning passes the owner constraints: Apache-2.0 originals; human approval separation; verified completion; synthetic fixtures; Triad placement; no implicit deployment or merge.
 
 - **Application gate (A-001).** MIT/Apache-only shipped materials are enforced by the strict application-dependency gate, which must pass for what ships.
-- **Platform scope.** Platform/image eligibility is **POLICY-PENDING** (see above), so release stays blocked.
+- **Platform scope.** Resolved by the owner on 2026-11-08: platforms are inventoried separately and not held to the allowlist (see above). Release stays blocked by the other open gates.
 - **Planning basis.** The root's planning constitution reflects existing constraints, not newly ratified policy.
 - **When to recheck.** After T027 qualification and before release.
 - **Baseline.** Recorded in this feature so it travels with the spec leg.
