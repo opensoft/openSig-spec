@@ -168,7 +168,7 @@ The default execution is strictly sequential in the order listed, with one write
 - FR-009: T018, T019, T020, T022, T040, T041
 - FR-010: T021, T022
 - FR-011: T001, T002, T023, T026, T027
-- FR-012: T011, T012, T014, T015, T017, T022, T024, T025, T029, T030
+- FR-012: T004, T011, T012, T014, T015, T017, T022, T024, T025, T029, T030
 
 **Success criteria.**
 - SC-001: T017
@@ -177,7 +177,7 @@ The default execution is strictly sequential in the order listed, with one write
 - SC-004: T009, T011
 - SC-005: T017 (indicative-local); declared hardware OPEN in T025
 - SC-006: T022 (primary), T018, T020, T021, T040, T041 (supplementary)
-- SC-007: T002, T023, T025, T026, T027
+- SC-007: T002, T004, T023, T025, T026, T027
 
 **Task count.** 41 in total: Setup 4, Foundational 9, US1 8, US2 10, US3 7, Release 3.
 
