@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "openSig Corporate Signing MVP",
-    "version": "0.2.0-draft",
+    "version": "0.2.1-draft",
     "license": {
       "name": "Apache-2.0",
       "identifier": "Apache-2.0"
@@ -3801,7 +3801,15 @@
       "AuditEventRecord": {
         "type": "object",
         "additionalProperties": false,
+        "description": "One audit event carrying exactly its digest preimage. event_digest = SHA-256 (lowercase hex) of the RFC 8785 canonical JSON of this object without event_digest, i.e. of {schema, tenant_id, seq, type, actor{kind, ref}, server_time, envelope_id, subject_digest, metadata, prev_digest}. Any holder can recompute it from the receipt alone. metadata is the redacted object stored at write time (never capability values, codes, keys, contact secrets or PDF content); tenant_id and envelope_id are opaque identifiers, not capabilities.",
         "properties": {
+          "schema": {
+            "const": "opensig.audit-event/1"
+          },
+          "tenant_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{16,64}$"
+          },
           "seq": {
             "type": "integer",
             "minimum": 1
@@ -3824,6 +3832,7 @@
               },
               "ref": {
                 "type": "string",
+                "minLength": 1,
                 "maxLength": 100
               }
             },
@@ -3837,6 +3846,17 @@
             "format": "date-time",
             "description": "Server UTC time; unsigned server time, never a trusted timestamp"
           },
+          "envelope_id": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{16,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "subject_digest": {
             "oneOf": [
               {
@@ -3849,6 +3869,10 @@
               }
             ]
           },
+          "metadata": {
+            "type": "object",
+            "description": "Redacted metadata exactly as hashed"
+          },
           "prev_digest": {
             "oneOf": [
               {
@@ -3859,7 +3883,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "null only for seq 1 of the tenant chain"
           },
           "event_digest": {
             "type": "string",
@@ -3868,11 +3893,15 @@
           }
         },
         "required": [
+          "schema",
+          "tenant_id",
           "seq",
           "type",
           "actor",
           "server_time",
+          "envelope_id",
           "subject_digest",
+          "metadata",
           "prev_digest",
           "event_digest"
         ]
@@ -3880,7 +3909,7 @@
       "AuditReceipt": {
         "type": "object",
         "additionalProperties": false,
-        "description": "audit-receipt.json: this envelope's events from the tenant's hash chain (redacted: no capability values, codes, keys or PDF content), the chain head at completion and the latest checkpoint. Tamper-evident, not tamper-proof.",
+        "description": "audit-receipt.json: every event of this envelope from the tenant's hash chain, each with its full digest preimage (AuditEventRecord), plus the chain head at completion and the latest checkpoint. A holder can recompute every event_digest. prev_digest links to the tenant chain, whose events for other envelopes are omitted for confidentiality, so continuity is checkable only between consecutive seq values in the receipt; full-chain continuity is attested by chain_head_digest and the checkpoint and verified on restore. Tamper-evident, not tamper-proof.",
         "properties": {
           "schema": {
             "const": "opensig.audit-receipt/1"

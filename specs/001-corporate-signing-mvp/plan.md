@@ -429,6 +429,12 @@ Each entry names a path and what an edit there moves. Every listed path is `[O]`
 - `NOTICE` — retained third-party notices.
 - `docs/evidence/` — measured acceptance values.
 
+## Reconciliation notes (implementation-reported, accepted)
+
+- **T029 (c84988d), retention configuration.** The format is `retention_json` = `{policy_ref, dispose_after_days, scope?: "documents" | "all"}`. "archive" is not implemented, because the spec never defined it. Recorded in data-model.md; no task change.
+- **T029 (c84988d), audit receipt shape.** The receipt now carries T029's exact digest preimage (contract 0.2.1, `AuditEventRecord`), so third parties can recompute every event_digest. T016 builds the records from `digestInput()`. T029's seven-field `recordFromRow` and `AuditEventRecord` type are superseded and are left for the final reconciliation; no T029 rework is required.
+- **Orphan finalization blobs.** Owned by T038: the FinalizationAttemptBlob migration, recording before writing, and the collector in `src/storage/retention/orphans.ts`.
+
 ## Delivery and Landing
 
 T001 establishes the pinned runtime, the type check and the frozen runner. T026 (no-secrets) and T002/T027 (inventory and qualification) must pass before any work that builds on dependencies. After T027 no package may be added. Phase 2 may run as two disjoint writer lanes in separate code worktrees (amendment A-005; tasks.md § Dependencies). Each lane has one writer and keeps every per-task check. Lane B commits are cherry-picked onto the feature branch in order, and all Phase 2 modes are re-run on the integrated head before US1 starts. US1 and later phases stay sequential. A container composition (`compose.yaml`) is deferred: the dev launcher is a Node script bound to loopback. US1 delivers human approval visibly short of sealed completion. US2 completes the signing MVP. US3 proves Hermes reuse and the healthcare contracts. Run synthesis/security/recovery acceptance before claiming the whole feature complete. Keep every implementation task unchecked until it is executed.
