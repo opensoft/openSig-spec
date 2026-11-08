@@ -92,7 +92,7 @@ Each mode is `{ task, kind, files, minTests, requiredCases, capabilities, eviden
 
 - `kind` is one of `tooling | unit | harness | contract | acceptance | aggregate | release`;
 - `files` lists explicit globs that the runner expands itself. The runner never passes a directory or glob to `node --test`;
-- `capabilities` takes probe names from: `openssl` (OpenSSL ≥ 3.0 with `cms`), `chromium` (the browser revision matching the pinned Playwright), `hermes-runtime`, `external-pdf-reader`, `declared-hardware` and `ci-run`. `openssl` and `chromium` probes are built in. Any other probe is delegated to `scripts/capabilities/<name>.mjs`, which exits 0 when the capability is present; an absent or failing probe file means CAPABILITY_ABSENT;
+- `capabilities` takes probe names from: `openssl` (OpenSSL ≥ 3.0 with `cms`), `chromium` (the browser revision matching the pinned Playwright), `hermes-runtime`, `claude-sdk-transport`, `external-pdf-reader`, `declared-hardware` and `ci-run`. `openssl` and `chromium` probes are built in. Any other probe is delegated to `scripts/capabilities/<name>.mjs`, which exits 0 when the capability is present; an absent or failing probe file means CAPABILITY_ABSENT;
 - `evidence` lists required evidence files and required labels;
 - `typecheck` is a boolean;
 - `contract: true` requires `contracts/http-api.json` plus `contracts/http-api.source.json` ({repo, commit, path, sha256}) with a matching digest;
@@ -144,9 +144,9 @@ Fixture suites are generated in a temp directory at run time. Engine behavior is
 25. aggregate stops at the first non-PASS and reports it
 26. sentinel failure → 7
 
-### Mode registry (every mode named in tasks.md, pre-registered by T001)
+### Mode registry (43 modes; every mode named in tasks.md, pre-registered by T001)
 
-Before a mode's own task lands, its file globs match nothing, so the mode returns VACUOUS. That is the correct result.
+Before a mode's own task lands, its file globs match nothing, so the mode returns VACUOUS. That is the correct result. `us3-real-model` is a supplementary, separately labeled attempt. It belongs to no aggregate, and its CAPABILITY_ABSENT never blocks `us3`; the scripted-model `us3` run stays the recorded SC-006 evidence.
 
 | Mode | Task | Kind | Test files | minTests | Required case IDs | Capabilities | Evidence |
 |---|---|---|---|---|---|---|---|
@@ -187,10 +187,11 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 | `anchoring-disabled` | T021 | unit | `tests/anchoring/**/*.test.mjs` | 6 | AN-01..AN-03 | — | — |
 | `hermes-runtime` | T040 | unit | `tests/hermes-runtime/**/*.test.mjs` | 4 | HR-01..HR-03 | hermes-runtime (probe `scripts/capabilities/hermes-runtime.mjs`: docker daemon plus local image `docker.io/nousresearch/hermes-agent@sha256:adb7890916de63245523492be8f68f9d2095fecbec4e2a6dab7960381f0fc002`) | — |
 | `us3` | T022 | acceptance | `tests/acceptance/us3/**/*.test.mjs` | 9 | SC006-01..SC006-09 | hermes-runtime, chromium | `.verify-out/us3/evidence.json` labels: hermes_runtime=isolated-local, hermes_upstream (image digest), hermes_version=v0.23.0, network=none, provider=scripted-deterministic, tool_search=on\|off, production_hermes=not-exercised, notification=local-spool, tree_digest |
+| `us3-real-model` | T041 | acceptance | `tests/acceptance/us3-real-model/**/*.test.mjs` | 4 | RM-01..RM-04 | hermes-runtime, claude-sdk-transport (probe `scripts/capabilities/claude-sdk-transport.mjs`: host-side OpenAI-compatible adapter reachable from the container and an authorized max001 transport; absent → CAPABILITY_ABSENT) | `.verify-out/us3-real-model/evidence.json` labels: provider=claude-sdk-max001-local, credentials=host-only, hermes_upstream, hermes_version=v0.23.0, production_hermes=not-exercised, tree_digest. The evidence and the Hermes config must contain no credential value |
 | `release-gates` | T023 | unit | `tests/release-gates/**/*.test.mjs` | 10 | RG-01..RG-06 | — | — |
 | `operations` | T024 | unit | `tests/operations/**/*.test.mjs` | 6 | OP-01..OP-03 | — | — |
 | `all-unit` | (npm test) | aggregate | components: every `unit`, `harness` and `contract` mode without capabilities | — | — | — | — |
-| `acceptance-local` | T025 | aggregate | components: every mode above except `tooling`, in task order | — | union must cover SC001-*, SC002-01..SC002-26, SC003-*, SC004-*, SC005-*, SC006-* | openssl, chromium, hermes-runtime | `.verify-out/acceptance-local/receipt.json` with `release_ready: false` and external gates OPEN; committed `docs/evidence/acceptance.json` with the same tree digest |
+| `acceptance-local` | T025 | aggregate | components: every mode above except `tooling` and `us3-real-model`, in task order | — | union must cover SC001-*, SC002-01..SC002-26, SC003-*, SC004-*, SC005-*, SC006-* | openssl, chromium, hermes-runtime | `.verify-out/acceptance-local/receipt.json` with `release_ready: false` and external gates OPEN; committed `docs/evidence/acceptance.json` with the same tree digest |
 | `acceptance` | (release gate) | release | components: `acceptance-local` plus external gates `external-pdf-reader`, `declared-hardware`, `ci-run`, platform inventory (POLICY-PENDING), trusted certificate, real OIDC/SMTP | — | — | external-pdf-reader, declared-hardware, ci-run | receipt with every gate closed; FAIL while any is OPEN |
 
 `typecheck: true` applies to every non-aggregate mode, `tooling` included, which proves the TypeScript pin and tsconfig work. Each aggregate typechecks once.
