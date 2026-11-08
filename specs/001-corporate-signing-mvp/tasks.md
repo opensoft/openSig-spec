@@ -99,14 +99,21 @@ Status: planned. Every implementation task is intentionally unchecked. This file
 
 ## Dependencies and execution order
 
-The default execution is strictly sequential in the order listed, with one writer per code worktree. No `[P]` marker appears. Two dependency rules span the whole list: no package is added after T027, and the runner is frozen after T001.
+The default execution is strictly sequential in the order listed, with one writer per code worktree. No `[P]` marker appears. The only parallelism is the two Phase 2 writer lanes defined below (sequencing amendment A-005). Two dependency rules span the whole list: no package is added after T027, and the runner is frozen after T001 (code commit a71b3bc).
 
 **Phase 1.** T001 → T026 → T002 → T027.
 
-**Phase 2.**
-- Blob store, then audit chain, then outbox and restore: T003 → T028 → T029 → T030.
-- Fixtures and dev launcher, then auth, then server, then notifications: T004 → T005 → T031 → T032.
-- The parse service needs the T004 fixtures: T033.
+**Phase 2: two disjoint writer lanes (amendment A-005).** Both lanes start only after Phase 1 (T001, T026, T002, T027) is accepted.
+
+- **Lane A** (main code worktree `worktrees/001-corporate-signing-mvp/code`, feature branch `001-corporate-signing-mvp`): T003 → T028 → T029 → T030. That is storage, then the blob store, then the audit chain and retention, then outbox and restore.
+- **Lane B** (second code worktree `worktrees/001-corporate-signing-mvp/code-lane-b`, temporary branch `001-corporate-signing-mvp-lane-b`, cut from the accepted Phase 1 head after T027): T004 → T033 → T005 → T031 → T032. That is fixtures and the dev launcher, then the parse service (which needs the T004 fixtures), then auth, then the server, then notifications.
+
+**Lane rules.**
+- **Disjoint by construction.** No `files:` path or directory prefix of a lane A task overlaps one of a lane B task. No Phase 2 dependency edge crosses lanes. Neither lane lists `package.json`, `package-lock.json` or a frozen runner file. A lane B task must not import `src/storage/`, and a lane A task must not import `src/server/`, `src/api/`, `src/pdf/`, `src/notifications/` or `fixtures/`. Any task found to overlap would run sequentially instead.
+- **One writer per worktree, per-task checks unchanged.** Each lane has exactly one writer. Each worktree fetches its own runtime with `sh scripts/fetch-node.sh` into its own gitignored `tools/`. Every task keeps the full orchestrator checks: the freeze diff against a71b3bc, scope, the task's verify, `no-secrets`, the transcript model check, and regression of every Phase 1 mode plus the earlier modes of the same lane.
+- **Integration.** The orchestrator cherry-picks each accepted lane B commit onto the feature branch, in lane order, with no squash and per-task commits preserved. A conflict stops integration and is reported; it is never resolved by editing task files. Lane A commits land directly on the feature branch.
+- **After both lanes are integrated:** every Phase 2 mode (`storage`, `blobs`, `audit-chain`, `outbox-restore`, `dev`, `parser-limits`, `auth`, `server`, `notifications`) is re-run on the integrated head. Then the phase-end regression reviewer and the validation runner run. Finally the lane B branch is deleted and the `code-lane-b` worktree removed.
+- **Later phases.** US1 and every later phase stay strictly sequential in the main code worktree, unless a later amendment says otherwise.
 
 **US1** (needs phase 2).
 - T006 → T007 → T008. The ceremony needs the envelope domain and notifications.
