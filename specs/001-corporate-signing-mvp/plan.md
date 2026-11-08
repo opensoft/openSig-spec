@@ -74,11 +74,49 @@ FR-011 says: "fail release on unknown/disallowed third-party licenses, including
 
 ## Verification runner contract (frozen by T001)
 
-T001 writes `scripts/verify.mjs` (engine and CLI), `scripts/verify-modes.mjs` (registry) and `tests/tooling/verification-runner.test.mjs` (self-tests). After T001's commit these three files are **frozen**. No later task lists them, and before accepting any later task the orchestrator runs:
+T001 writes `scripts/verify.mjs` (engine and CLI), `scripts/verify-modes.mjs` (registry) and `tests/tooling/verification-runner.test.mjs` (self-tests). After the T001 hardening commit (amendment A-006 below) these three files are **frozen**. No later task lists them, and before accepting any later task the orchestrator runs:
 
 `git diff --quiet <T001-sha> HEAD -- scripts/verify.mjs scripts/verify-modes.mjs tests/tooling/verification-runner.test.mjs`
 
 Only a recorded architect amendment can add a mode. It does so through a new `[O]` task that lists these files, re-runs the self-tests and re-freezes at that task's commit.
+
+### Amendment A-006: T001 hardening round and re-freeze (2026-11-08)
+
+**Basis.** A read-only regression review and an independent validation run of T001 at code commit a71b3bc. Neither found a BLOCKER or HIGH defect, nor any path that exits 0 for a non-pass status. The T001 verify command passed on v24.22.2 with 27/27 self-tests.
+
+**Scope.** The T001 writer does one bounded hardening round, immediately after T026 is accepted and before T002. It uses the same `files:` list and the same verify command as T001. It adds no mode, and it changes no registry row except the component order in L7.
+
+| Item | Change |
+|---|---|
+| M1 | Recompute the tree digest after test execution and before the evidence and committed-receipt checks. A mismatch ("tree changed during run") gives EVIDENCE_MISSING. |
+| M2 | The runner itself returns ENV_MISMATCH when any of these differ from the frozen values: `package.json` `scripts.verify`, `scripts.test` or `scripts.typecheck`; `engines.node`; the three `.npmrc` keys; `tsconfig.json`, including any `noCheck`. |
+| M3 | Add self-tests for: the release gate returning FAIL and naming all 7 gates; `acceptance-local` returning CAPABILITY_ABSENT at top level; its receipt carrying `release_ready: false`; committed-evidence mismatch → 5; typecheck error → 1; cancellation → 1. Raise `EXPECTED_TESTS` to match. The registry's `tooling.minTests` of 26 stays a floor. |
+| L1 | Scan for mock identities in every string value at any depth. |
+| L3 | Require `process.execArgv` to be empty. |
+| L4 | A symlink under `tests/` gives RUNNER_ERROR. |
+| L5 | Set `process.exitCode` before writing the status line. |
+| L6 | Detect lockfile version or integrity mismatches, and installed top-level packages missing from `node_modules/.package-lock.json`. |
+| L7 | Order the `acceptance-local` components by the order of task lines in tasks.md. |
+| fetch-node.sh | Use a short `GNUPGHOME` that does not depend on a long `TMPDIR`, and print the gpg log on failure (validator defect: "File name too long"). Set the cleanup trap right after the first `mktemp` (F1). Embed the pinned `bin/node` SHA-256 (`904a6d34…2a52`) as a constant, and re-check it plus a hash of the bundled npm tree on every run (F2). Precheck every tool used: `mktemp`, `readlink`, `awk`, `sed`, `grep` (F3). |
+
+**Recorded without change.**
+- *Gate identifiers.* They stay as the runner emits them: `platform-inventory(POLICY-PENDING)`, `trusted-certificate-key-custody`, `validated-oidc-smtp`, `external-pdf-reader`, `declared-hardware`, `real-ci`, `production-hermes`. The registry row was aligned in fa3f3b6.
+- *L2.* Registry, environment or sentinel failures before `acceptance` dispatch return 6 or 7 without the gate list. They are still non-zero, so this is accepted as is.
+- *Usage line.* The no-mode output reads `verify: - USAGE`. This is cosmetic and accepted.
+- *F4, accepted deviation.* `scripts/fetch-node.sh` pins exactly one signer fingerprint (`5BE8A3F6C8A5C01D106C0AD820B1A390B168D356`, the v24.22.2 release signer) instead of the README's full releaser list. That is stricter and fails closed. A future runtime bump must update the pin with its measured signer.
+
+**Consequences for later tasks.**
+- T027 lists `package.json` but may only add exact-pinned `devDependencies`. It must not change the M2-frozen values. No later task lists `.npmrc` or `tsconfig.json`; T035 uses its own `tsconfig.browser.json`.
+
+**Re-freeze.**
+- The freeze baseline moves to the hardening commit, and `<T001-sha>` in every orchestrator freeze check means that commit.
+- After it, no runner edit of any kind is allowed except through a new architect-amendment `[O]` task as described above.
+- Acceptance of the hardening round requires all of the following:
+  - the T001 verify command;
+  - `npm run verify -- no-secrets` (T026);
+  - the scope check against T001's `files:`;
+  - the transcript model check;
+  - a regression reviewer re-check of the items above.
 
 ### Statuses
 
@@ -299,6 +337,7 @@ src/api/recipients/      recipient invitation/challenge/session/document/approve
 src/api/artifacts/       package, verification and receipt handlers (T016)
 src/api/webhooks/        webhook registration and HMAC key rotation handlers (T019)
 src/domain/              envelope/approval/version/state rules, consent text, finalization reservation (T007, T010, T038, T015)
+src/domain/canonical/    the single RFC 8785 canonical JSON module (T029); every other module imports it
 src/storage/             node:sqlite schema/migrations/transactions, blobs, outbox, audit chain, restore (T003, T028-T030)
 src/jobs/                expiry sweeper, finalization job runner with lease/fencing, outbox dispatcher (T010, T015, T038)
 src/notifications/       mail adapter: dev file spool, guarded SMTP, redaction, rate limits (T032)
