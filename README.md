@@ -35,3 +35,7 @@ All original openSig, openAutograph and openCryptograph work is Apache-2.0. Ship
 - [Triad placement](TRIAD-SETUP.md)
 
 The packet is non-normative brainstorm material. Names and license intent are owner decisions; engine/runtime/provider choices remain open. No signing application is implemented.
+
+## First implementation feature
+
+[001 corporate signing MVP](specs/001-corporate-signing-mvp/spec.md): human review/approval, visible autograph, independently verified organization seal and a Hermes pilot, with synthetic healthcare consumer contracts. See its [plan](specs/001-corporate-signing-mvp/plan.md) and [tasks](specs/001-corporate-signing-mvp/tasks.md). This is proposed/unimplemented work.
