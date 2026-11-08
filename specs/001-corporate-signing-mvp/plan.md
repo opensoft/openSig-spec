@@ -73,7 +73,7 @@ The decision closes this question only. It closes no deployment, trust, real-CI,
 **Handling under the decision.**
 
 - **Application gate (strict, must pass).** The application-dependency gate covers the shipped npm closure plus every bundled asset copied into a distributable. It is strict, it has no waiver, and it must actually pass for everything the code ships (T002/T027; T035 build provenance).
-- **Platform inventory.** A separate inventory (`scripts/platform-inventory.mjs`, `docs/platform-inventory.md`) records with status `INVENTORIED`: the pinned Node runtime and its embedded components, linked system libraries, the browser revision, the OpenSSL CLI and the Hermes image. Platform entries never affect the application gate.
+- **Platform inventory.** A separate inventory (`scripts/platform-inventory.mjs`, `docs/platform-inventory.md`) records with status `INVENTORIED`: the pinned Node runtime and its embedded components, linked system libraries, the browser revision, the OpenSSL CLI, util-linux `unshare` and the Hermes image. Platform entries never affect the application gate.
 - **Release gate.** The platform question no longer blocks release; amendment A-007 removes that gate from the runner. The release gate (`acceptance` mode) still fails on its six other open gates, and no task may mark any of them passed.
 - **Dev/test tools.** npm `devDependencies` are inventoried with full license data, labeled `non-shipped`, and the release build proves they contribute no bytes to the distributable. TypeScript 6.0.3 itself carries third-party notices (DefinitelyTyped MIT, Unicode, W3C, CC-BY-4.0 in its `lib` files; measured in `ThirdPartyNoticeText.txt`). It is a build tool, not an application dependency; this is recorded for the owner, not waived.
 
@@ -133,7 +133,7 @@ Only a recorded architect amendment can add a mode. It does so through a new `[O
 
 | Item | Change |
 |---|---|
-| Gate list | Remove `platform-inventory(POLICY-PENDING)` from the runner's external gate list. `acceptance` still returns FAIL and names the six remaining gates: `trusted-certificate-key-custody`, `validated-oidc-smtp`, `external-pdf-reader`, `declared-hardware`, `real-ci`, `production-hermes`. RT-28 asserts exactly these six. |
+| Gate list | Remove `platform-inventory(POLICY-PENDING)` from the runner's external gate list, and add the new production gate `parser-network-sandbox`. That gate closes only with evidence from the deployment environment that the PDF parse worker's namespace sandbox is active; local evidence never closes it. `acceptance` still returns FAIL and names exactly these seven gates, in this order: `trusted-certificate-key-custody`, `validated-oidc-smtp`, `external-pdf-reader`, `declared-hardware`, `real-ci`, `production-hermes`, `parser-network-sandbox`. RT-28 asserts exactly these seven. |
 | N1 | Require `.npmrc`'s non-blank, non-comment lines to equal exactly the three frozen `key=true` lines, compared as a whole like `tsconfig.json`. A quoted key, a section header or an extra key such as `script-shell` gives ENV_MISMATCH. |
 | N2 | RT-17 asserts that a reason starts with `runtime `, so the runtime-version check is proven on its own. |
 
@@ -143,7 +143,7 @@ Only a recorded architect amendment can add a mode. It does so through a new `[O
 - No other runner edit is allowed afterwards, except through a new architect-amendment `[O]` task.
 
 **T002 follow-up.** It runs after A-007 is accepted and keeps T002's `files:` and verify.
-- `scripts/platform-inventory.mjs` reports the platform inventory as recorded separately (status `INVENTORIED`) instead of `POLICY-PENDING`.
+- `scripts/platform-inventory.mjs` reports the platform inventory as recorded separately (status `INVENTORIED`) instead of `POLICY-PENDING`, and adds util-linux `unshare` (used by the T033 parser sandbox) to the inventoried tools.
 - It resolves `PLAYWRIGHT_BROWSERS_PATH` exactly as the frozen runner does: that variable when set, otherwise the default cache. This is the platform half of review finding R11.
 - LI-09 asserts the new status, and that platform entries never affect the application gate.
 - `docs/platform-inventory.md` is updated to match.
@@ -270,7 +270,7 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 | `operations` | T024 | unit | `tests/operations/**/*.test.mjs` | 6 | OP-01..OP-03 | — | — |
 | `all-unit` | (npm test) | aggregate | components: every `unit`, `harness` and `contract` mode without capabilities | — | — | — | — |
 | `acceptance-local` | T025 | aggregate | components: every mode above except `tooling`, `us3-real-model` and `all-unit`, in task order | — | union must cover SC001-*, SC002-01..SC002-26, SC003-*, SC004-*, SC005-*, SC006-* | openssl, chromium, hermes-runtime | `.verify-out/acceptance-local/receipt.json` with `release_ready: false` and external gates OPEN; committed `docs/evidence/acceptance.json` with the same tree digest |
-| `acceptance` | (release gate) | release | components: `acceptance-local` plus the open gates, named exactly as the frozen runner emits them after A-007: `trusted-certificate-key-custody`, `validated-oidc-smtp`, `external-pdf-reader`, `declared-hardware`, `real-ci`, `production-hermes` | — | — | external-pdf-reader, declared-hardware, ci-run | receipt with every gate closed; FAIL while any is OPEN |
+| `acceptance` | (release gate) | release | components: `acceptance-local` plus the open gates, named exactly as the frozen runner emits them after A-007: `trusted-certificate-key-custody`, `validated-oidc-smtp`, `external-pdf-reader`, `declared-hardware`, `real-ci`, `production-hermes`, `parser-network-sandbox` | — | — | external-pdf-reader, declared-hardware, ci-run | receipt with every gate closed; FAIL while any is OPEN |
 
 `typecheck: true` applies to every non-aggregate mode, `tooling` included, which proves the TypeScript pin and tsconfig work. Each aggregate typechecks once.
 
@@ -434,6 +434,18 @@ Each entry names a path and what an edit there moves. Every listed path is `[O]`
 - **T029 (c84988d), retention configuration.** The format is `retention_json` = `{policy_ref, dispose_after_days, scope?: "documents" | "all"}`. "archive" is not implemented, because the spec never defined it. Recorded in data-model.md; no task change.
 - **T029 (c84988d), audit receipt shape.** The receipt now carries T029's exact digest preimage (contract 0.2.1, `AuditEventRecord`), so third parties can recompute every event_digest. T016 builds the records from `digestInput()`. T029's seven-field `recordFromRow` and `AuditEventRecord` type are superseded and are left for the final reconciliation; no T029 rework is required.
 - **Orphan finalization blobs.** Owned by T038: the FinalizationAttemptBlob migration, recording before writing, and the collector in `src/storage/retention/orphans.ts`.
+
+- **Deviation and remedy: T033 parser network isolation (lane B 0c70b56, 45ae2ef).**
+  - **What was built.** The parse worker shipped with no OS-level network block: Node 24's permission model has no network control. Its "isolation" rested on a static import boundary (PL-12) and an empty child environment.
+  - **Ruling.** The owner/driver ruled that this does not enforce network isolation against a parser or runtime exploit, and must not be recorded as fulfilling the requirement.
+  - **Remedy (amended T033, same `files:` and `parser-limits` mode).**
+    - Where the probe succeeds, the worker runs inside a new user and network namespace (util-linux `unshare`; least-privilege mapping `--map-current-user` where supported, otherwise `--map-root-user`; no host privilege, no privileged host change).
+    - New test PL-13 proves an OS-level connect failure from inside the sandbox and that parsing still works.
+    - Without the capability, production mode fails closed. Development mode runs unsandboxed and reports `network_sandbox: unavailable`.
+    - PL-12 is relabelled "import boundary (defence in depth), not network isolation".
+  - **New gate.** `parser-network-sandbox` (A-007) stays OPEN until deployment-environment evidence exists.
+  - **Evidence wording.** Evidence and receipts report the observed local capability (`netns-enforced (local)` or `unavailable`) and never imply that the production gate passed.
+  - **Caveat.** Some CI hosts refuse unprivileged user namespaces (for example Ubuntu 24.04's AppArmor restriction). There the service fails closed in production mode, and the gate stays OPEN.
 
 ## Delivery and Landing
 

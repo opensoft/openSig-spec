@@ -99,6 +99,7 @@ The release gate `acceptance` stays failing until all of these are closed with e
 - a real CI run;
 - an approved trusted certificate and key custody;
 - validated OIDC and SMTP;
+- the PDF parse worker's network-namespace sandbox shown active in the deployment environment (`parser-network-sandbox`); local runs only record the observed capability;
 - configured retention;
 - owner-authorized environment and notifications.
 
