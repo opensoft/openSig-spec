@@ -25,3 +25,13 @@ navigation; authority travels in grants, and a project that keeps spec and
 code in one repository is reviewed identically.
 
 Topic: `xf-project-opensig`.
+
+## Signing platform design
+
+All original openSig, openAutograph and openCryptograph work is Apache-2.0. Shipped third-party materials must satisfy the MIT/Apache allowlist.
+
+- [Architecture overview](ideation/brainstorm/opensig-overview.md)
+- [Implementation plan](ideation/brainstorm/opensig-implementation-plan.md)
+- [Triad placement](TRIAD-SETUP.md)
+
+The packet is non-normative brainstorm material. Names and license intent are owner decisions; engine/runtime/provider choices remain open. No signing application is implemented.
