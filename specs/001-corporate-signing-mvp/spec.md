@@ -6,6 +6,17 @@
 **Input**: User requested the first-round openSig MVP feature documented through the prescribed Triad OpenSpec/Speckit workflow.  
 **Governance**: [proposal](../../openspec/changes/add-corporate-signing-mvp/proposal.md)
 
+## Clarifications
+
+### Session 2026-11-08
+
+- Q: Is the recipient invitation link (or any challenge code or session value) ever returned to Hermes or any other tool or service caller? → A: No. Invitations go to the recipient's mailbox only. No API response, tool result, log, audit event or operator/service notification contains a link, token or code, and Hermes has no access to the mail spool. Governing principles: P2 (human personal approval cannot be delegated to Hermes service credentials) and P4 (secrets kept out of Git and logs).
+- Q: Can an envelope that Hermes (a service principal) created be sent without a human? → A: No. A human operator of the tenant confirms the recipient preview (document, manifest and recipients digests). That creates a single-use `authorization_reference`, which `request_signatures` must present. Hermes can never create the confirmation itself. Governing principle: P2.
+- Q: What consent evidence is persisted: the version label, or the wording? → A: The exact wording. Consent text is an immutable, versioned entity with a SHA-256 text digest. Each approval binds both `consent_version` and `consent_text_digest`, and the approval manifest in the package carries the full text. Governing principle: P2 (preserve exact-version consent evidence).
+- Q: What does "fully approved" mean in the state model, including the one-recipient case? → A: `approvals_complete = true`, meaning every required approval is recorded. In the same transaction the envelope moves to `finalizing`, and only verified durable output moves it to `completed`. A one-recipient envelope goes `sent → finalizing` on its single approval. `in-progress` exists only between the first and last approvals of a two-recipient envelope. "Fully approved" is never shown as completed or sealed. Governing principle: P3 (verify before completion; separate human authority from certificate integrity).
+- Q: Who supplies the value of a date field? → A: The server, from server UTC time at approval, labeled unsigned server time. Clients submit no date value. Governing principles: P2 (exact approval evidence) and P3 (a server time is never presented as a trusted timestamp).
+- Q: How are typed signatures and dates rendered without shipping a font file? → A: In standard-14 Helvetica, which is not embedded. Characters outside WinAnsiEncoding are rejected (422 `unsupported_characters`). Governing principle: P1 (no third-party font asset ships outside the MIT/Apache allowlist).
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Review and approve a corporate document (Priority: P1)
@@ -18,8 +29,8 @@ An authorized sender prepares one PDF and one or two sequential recipients. Each
 
 **Acceptance Scenarios**:
 
-1. Given a draft with valid fields, when sent, then its document and field definitions freeze and only the first recipient can approve.
-2. Given a frozen document, when a recipient authenticates mailbox control, reviews and explicitly consents, then approval records its version, field values, role, consent version and assurance.
+1. Given a draft with valid fields, when prepared, then its document and field manifest freeze; when sent, only the first recipient can approve.
+2. Given a frozen document, when a recipient authenticates mailbox control, reviews and explicitly consents, then approval records its version, field values, role, the exact consent text version and digest, and assurance.
 3. Given expired/revoked access or a mismatched version, when approval is attempted, then it fails without recording approval.
 
 ### User Story 2 - Obtain and verify a protected package (Priority: P1)
@@ -46,7 +57,7 @@ An authorized user asks Hermes to prepare/request a signature, follow progress a
 
 **Acceptance Scenarios**:
 
-1. Given authorized preparation and delivery, when Hermes requests signing, then a human gets a usable link and Hermes cannot call human approval or access signing keys.
+1. Given authorized preparation and a human operator's confirmation of the recipient preview, when Hermes requests signing, then the human recipient gets a usable link by mail only; Hermes never receives the link, cannot call human approval and cannot access signing keys.
 2. Given duplicate or mismatched completion, when a consumer handles it, then no duplicate attachment, clinical attestation, charge or claim action occurs.
 3. Given no configured live ledger, when signing completes, then it succeeds normally; fake evidence is never labeled blockchain-confirmed.
 
@@ -73,7 +84,7 @@ Void versus approval/finalization races; duplicate idempotency key with changed 
 
 ### Key Entities
 
-Tenant; Envelope; DocumentRevision; FieldDefinition; Recipient; SigningSession; Approval; SigningJob; FinalArtifact; VerificationReport; AuditEvent; OutboxEvent; ConsumerAttachment; AnchorReceipt. Exact validation/transitions are in [data model](data-model.md).
+Tenant; Envelope; DocumentRevision; FieldDefinition; FieldManifest; Recipient; ConsentText; SendConfirmation; Invitation; Challenge; RecipientSession; Approval; SigningJob; FinalArtifact; VerificationReport; AuditEvent; AuditCheckpoint; OutboxEvent; WebhookRegistration; ConsumerAttachment; AnchorReceipt. Exact validation/transitions are in [data model](data-model.md).
 
 ## Success Criteria
 
