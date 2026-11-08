@@ -33,7 +33,16 @@ Deliver one corporate signing flow with openAutograph human approval and an open
 
 **How verify commands run on the pinned runtime.** Every task's verify is `npm run verify -- <mode>`. The orchestrator runs it from the code tree with `PATH="$PWD/tools/node/bin:$PATH"`, after `sh scripts/fetch-node.sh` and `npm ci`. The package script is `tools/node/bin/node scripts/verify.mjs`, so whichever npm launches it, the pinned binary runs the gate. The runner returns ENV_MISMATCH when `process.version` differs from `v` + `.node-version`, when the platform is not linux-x64, or when the installed `node_modules/.package-lock.json` disagrees with `package-lock.json`. Measured: npm 11.19.0 propagates a script's exit status unchanged (exit 2 and exit 4 came back as 2 and 4). Orchestrators still treat any non-zero exit as failure and read the runner's final status line.
 
-**Dependencies.** pdf-lib, `@signpdf/*` and node-forge are ineligible (measured; see [research](research.md)). The PDF/CMS engine, the review renderer and every shipped package are decided in research.md § Engine decision. Every third-party package lands, with exact pins, only in a task whose `files:` lists `package.json`/`package-lock.json` (T001 for TypeScript and `@types/node`; T027 for the rest).
+**Dependencies (amendment A-002).** The PDF/CMS engine is original Apache-2.0 code on `node:crypto` and `node:zlib`, so the **shipped npm closure is empty**.
+- **Measured and rejected:** pdf-lib, `@signpdf/*` (node-forge) and @libpdf/core 0.5.3, whose closure includes pako `(MIT AND Zlib)`, pkijs/asn1js/bytestreamjs BSD-3-Clause, lru-cache BlueOak-1.0.0 and tslib 0BSD.
+- **Deferred:** pdfjs-dist 6.5.438. Its bundled fonts, cmaps and wasm carry BSD, OpenJPEG and Liberation licenses, and its worker embeds glue modules whose provenance is unproven.
+- **Review rendering:** the browser's built-in PDF viewer, plus an original page-outline schematic and a link that downloads the exact frozen bytes.
+- **Signature capture:** original pointer-to-vector-stroke code.
+- **OIDC:** original JWT/JWKS validation.
+- **Packaging:** an original store-method ZIP writer.
+- **Dev-only packages:** typescript, `@types/node` and playwright are `non-shipped`.
+- **Where packages land:** every third-party package lands, with exact pins, only in a task whose `files:` lists `package.json`/`package-lock.json`. That is T001 for typescript and `@types/node`, and T027 for playwright.
+- **Evidence:** research.md § Engine decision.
 
 **Storage.** Built-in `node:sqlite` (no npm driver, no native addon), single instance, with `BEGIN IMMEDIATE` transactions, a busy timeout and a transactional outbox. Blobs are immutable, tenant-namespaced and content-addressed on the filesystem behind an object-store interface. Development keys are ephemeral self-signed fixtures generated at test runtime outside the tree. Production managed key access is a separate rollout gate.
 
@@ -283,17 +292,34 @@ Void can win only before the finalizing reservation. Later cancellation returns 
 The spec feature owns spec.md, plan.md, research.md, data-model.md, contracts/, quickstart.md, tasks.md and checklists/. governance-baseline.md is a byte-identical snapshot of the planning constitution (sha256 `eec589f3…`), kept so the baseline travels with the spec leg. The OpenSpec proposal/delta remains in the spec leg and hands off here. Code implementation is in the paired code worktree:
 
 ```text
-src/api/                 HTTP handlers, auth and input limits
-src/domain/              envelope/approval/version rules
-src/storage/             transactions, blobs and outbox
-src/autograph/           browser review/consent/signature UI
-src/cryptograph/         isolated compose/sign/verify worker and key adapters
-src/integrations/        Hermes tools, synthetic healthcare consumers
-src/anchoring/           disabled and fake adapters only
-scripts/                 runtime fetch, frozen verification runner, inventory and release receipts
-tests/                   one directory per verify mode (see registry)
-fixtures/synthetic/      generated documents and identities only
+src/server/              HTTP entrypoint, router, input limits, security headers, log redaction (T031)
+src/api/auth/            operator OIDC/JWKS, role-by-operation matrix, service vs human operator (T005)
+src/api/envelopes/       operator envelope handlers incl. send confirmation, void, reissue, retry (T034, T010, T038)
+src/api/recipients/      recipient invitation/challenge/session/document/approve/decline handlers (T008, T010)
+src/api/artifacts/       package, verification and receipt handlers (T016)
+src/api/webhooks/        webhook registration and HMAC key rotation handlers (T019)
+src/domain/              envelope/approval/version/state rules, consent text, finalization reservation (T007, T010, T038, T015)
+src/storage/             node:sqlite schema/migrations/transactions, blobs, outbox, audit chain, restore (T003, T028-T030)
+src/jobs/                expiry sweeper, finalization job runner with lease/fencing, outbox dispatcher (T010, T015, T038)
+src/notifications/       mail adapter: dev file spool, guarded SMTP, redaction, rate limits (T032)
+src/pdf/                 bounded PDF parser and the isolated parse service (T033)
+src/cryptograph/         compose (incremental update), cms (DER/SignedData), keys, worker (T013, T036, T037)
+src/verifier/            shipped product verifier; imports only node:* and src/verifier/** (T014)
+src/artifacts/           deterministic ZIP writer and package assembly (T039, T016)
+src/autograph/           browser review/consent/signature UI sources (T009); built to dist/ by T035
+src/integrations/hermes/ stdio MCP server and adapter: four tools, no approve tool (T018)
+src/integrations/webhooks/ outbox delivery, signed replay-safe callbacks, SSRF-safe connector (T019)
+src/integrations/healthcare/ synthetic openChart/openPractice harness consumers (T020)
+src/anchoring/           disabled and fake adapters only (T021)
+scripts/                 fetch-node.sh, frozen verify runner/registry, inventory, no-secrets, dev, build-ui, release evidence
+scripts/capabilities/    delegated capability probes (hermes-runtime, claude-sdk-transport)
+tests/                   one directory per verify mode (see registry); tests/integrity/oracle/ is independent of src/
+fixtures/synthetic/      generated documents and identities only (no keys, no signature images)
+fixtures/hermes/         ephemeral isolated-Hermes config template and scripted endpoint (T040)
+contracts/               vendored copy of the spec-leg http-api contract plus source record (T006)
+docs/                    qualification, platform inventory, operations, threat model, evidence summaries
 tools/                   gitignored pinned runtime (never committed)
+dist/, var/, .verify-out/ gitignored build output, local data and run evidence
 ```
 
 ## Governed invariants
