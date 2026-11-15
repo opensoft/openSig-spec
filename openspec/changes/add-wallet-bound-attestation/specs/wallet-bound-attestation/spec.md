@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Attest that a proof came from a wallet's declared key
-When a relying party that openSig authenticates gives it a single-use challenge reference, the digest a proof was made over, and a proof made under openWallet's possession-only profile `wallet-challenge-proof`, openSig SHALL verify the proof with openWallet's own verification of that profile against the current binding of the wallet's key, SHALL compare the binding's custody reference with the custody the held wallet record declares for that key, and SHALL record the result as a wallet-bound attestation signed with openSig's attestation key. openSig SHALL NOT implement a second verification of openWallet's profile. An attestation SHALL state: the wallet; the key, with its fingerprint; the custody model that key declares; the binding and revision the proof was checked against, with the public key it named; the proof itself; the digest the proof was made over; the relying party and its challenge reference, as the relying party gave them; the time; the result; and the openWallet verification used. It SHALL carry everything a relying party needs to verify the sealed proof itself, under the sealed public key, over a digest the relying party recomputes.
+When a relying party that openSig authenticates gives it a single-use challenge reference, the digest a proof was made over, and a proof made under openWallet's possession-only profile `wallet-challenge-proof`, openSig SHALL verify the proof with openWallet's own verification of that profile against the current binding of the wallet's key, SHALL compare the binding's custody reference with the custody the held wallet record declares for that key, and SHALL record the result as a wallet-bound attestation signed with openSig's attestation key. openSig SHALL NOT implement a second verification of openWallet's profile. An attestation SHALL state, apart, what openSig was given and what openSig resolved for itself. What it was given, as the relying party gave it: the relying party, its challenge reference, the digest, and the proof itself, or, for a proof that does not pass the profile's strict decoding, only the SHA-256 of the bytes received. What openSig resolved: the binding and revision the proof was checked against, with the public key it named and that key's fingerprint, which openSig recomputes; and the custody model and the states the held wallet record declares for that key. It SHALL also state the time, the result, and the openWallet verification used. A `verified` attestation SHALL carry every resolved value. A `not_verified` attestation SHALL carry each value openSig resolved before the check failed, and SHALL name each one it did not obtain, with why. No resolved value SHALL ever be filled from the proof: the references inside a proof are only what the proof claims. For a `verified` result the attestation SHALL carry everything a relying party needs to verify the sealed proof itself, under the sealed public key, over a digest the relying party recomputes.
 
 #### Scenario: A proof verifies
 - **WHEN** a relying party submits a challenge reference, a digest and a proof made over that digest by a key that the wallet's current binding names
@@ -14,6 +14,15 @@ When a relying party that openSig authenticates gives it a single-use challenge 
 #### Scenario: The key is not currently bound
 - **WHEN** the binding the proof names is revoked, expired or revised, or names another key or another wallet
 - **THEN** the result is `not_verified` with a reason naming which, and the attestation records the binding as the registry returned it
+
+#### Scenario: No binding is found
+- **WHEN** the key binding registry holds no binding for the reference the proof names
+- **THEN** the result is `not_verified` with reason `binding_not_found`, and the attestation records the proof as received and names the binding, the key's fingerprint, the declared custody and the states as not obtained
+- **AND** none of them is filled from the references inside the proof
+
+#### Scenario: A proof that does not decode is recorded by its digest
+- **WHEN** the proof does not pass the profile's strict decoding, for instance because it repeats a key or is not a JSON object
+- **THEN** the result is `not_verified` with reason `proof_malformed`, the attestation records only the SHA-256 of the bytes received, and openSig resolves nothing for it
 
 #### Scenario: The binding's custody differs from the wallet record's
 - **WHEN** the binding's custody reference names a model or registry version other than the one the held wallet record declares for that key
@@ -43,15 +52,23 @@ openSig SHALL accept from a relying party only the challenge reference, the dige
 - **THEN** it learns only that the named key made that proof over that digest under the binding then current, and the signer's licence, authority, consent and whether the sign-off counts remain the relying party's to decide
 
 ### Requirement: Produce and verify attestations again inside the relying party's deployment
-openSig SHALL produce a wallet-bound attestation inside the relying party's own deployment, contacting and waiting on no service outside it, and SHALL make every attestation verifiable again there from what the relying party holds: the attestation, the proof and the binding it seals, and openSig's attestation public keys, obtained ahead of time. For this the deployment SHALL hold an openSig attester whose attestation key is in custody there, the key binding registry that proofs are checked against or a current replica of it, the held records of the wallets bound there, and openSig's attestation public keys, retired ones included. Verifying again SHALL establish that openSig attested that result over that digest and that the sealed proof verifies under the sealed public key over that digest; it SHALL NOT claim that the binding is still current.
+openSig SHALL produce a wallet-bound attestation inside the relying party's own deployment, contacting and waiting on no service outside it, and SHALL make every attestation verifiable again there from what the relying party holds: the attestation, the proof and the binding it seals, and openSig's attestation public keys, obtained ahead of time. For this the deployment SHALL hold an openSig attester whose attestation key is in custody there, the key binding registry that proofs are checked against or a current replica of it, the held records of the wallets bound there, and openSig's attestation public keys, retired ones included. Verifying an attestation SHALL mean verifying openSig's signature over it under openSig's attestation public key; that establishes that openSig recorded that result, for that digest and challenge reference, at that time, whatever the result. Validating the recorded result is a second step. For a `verified` result the sealed proof SHALL verify under the sealed public key over the sealed digest, and an attestation whose result is `verified` but whose sealed proof does not verify SHALL be treated as invalid. For a `not_verified` result the sealed proof is evidence of what was submitted, and no check SHALL require it to verify. Neither step SHALL claim that the binding is still current.
 
 #### Scenario: Attestation with no outside network
 - **WHEN** a relying party asks for an attestation while no network outside its deployment is reachable
 - **THEN** openSig produces the same result it would produce with the network reachable, and contacts and waits on no service outside the deployment
 
 #### Scenario: An old attestation verifies after a key rotation
-- **WHEN** an attestation made years earlier is verified again after openSig's attestation key and the wallet's key have both been retired
-- **THEN** it verifies against the retired attestation public key the relying party holds, and its sealed proof verifies under its sealed public key
+- **WHEN** a `verified` attestation made years earlier is verified again after openSig's attestation key and the wallet's key have both been retired
+- **THEN** its signature verifies against the retired attestation public key the relying party holds, and, its result being `verified`, its sealed proof verifies under its sealed public key
+
+#### Scenario: A negative attestation verifies by its signature
+- **WHEN** a `not_verified` attestation with reason `digest_mismatch`, `signature_invalid` or `binding_not_found` is verified again
+- **THEN** its signature verifies, its result and reason are read as recorded, and no check requires its sealed proof to verify or a binding to be present
+
+#### Scenario: A verified result whose sealed proof does not verify
+- **WHEN** an attestation whose result is `verified` carries a sealed proof that does not verify under its sealed public key over its sealed digest
+- **THEN** the relying party treats the attestation as invalid, though openSig's signature over it verifies
 
 #### Scenario: Verifying again does not restore currency
 - **WHEN** an attestation is verified again after the wallet's binding was revoked
@@ -62,7 +79,7 @@ openSig SHALL produce a wallet-bound attestation inside the relying party's own 
 - **THEN** verifying it again fails
 
 ### Requirement: Never stand in for the holder, and fail closed with distinct results
-openSig SHALL NOT hold a wallet holder's private key, produce a proof for them, sign anything in their place or approve anything on their behalf. Its attestation key SHALL be a key of the deployment, used to sign wallet-bound attestations only, under a signing domain of its own, and never a document seal or any other signature. openSig SHALL fail closed on every doubt and SHALL answer every request with exactly one of: `refused`, with no check made and no attestation, for a request it does not accept; `verified`, with an attestation; `not_verified`, with an attestation of that result and a reason from a closed list; or `unavailable`, with no attestation and a reason, when it could not complete the check. It SHALL NOT turn `unavailable` into another result. For each relying party it SHALL attest at most once for a challenge reference and at most once for a challenge digest. A request from the same relying party that is identical, byte for byte, to one openSig has already attested, in its challenge reference, its digest and its proof, SHALL be answered with the stored attestation, unchanged, and SHALL NOT produce a second one. A request that repeats either the challenge reference or the digest and differs in anything else SHALL be refused. A `refused` or `unavailable` answer attests nothing, so a request after one is checked afresh.
+openSig SHALL NOT hold a wallet holder's private key, produce a proof for them, sign anything in their place or approve anything on their behalf. Its attestation key SHALL be a key of the deployment, used to sign wallet-bound attestations only, under a signing domain of its own, and never a document seal or any other signature. openSig SHALL fail closed on every doubt and SHALL answer every request with exactly one of: `refused`, with no check made and no attestation, for a request it does not accept; `verified`, with an attestation; `not_verified`, with an attestation of that result and a reason from a closed list; or `unavailable`, with no attestation and a reason, when it could not complete the check. It SHALL NOT turn `unavailable` into another result. For each relying party it SHALL attest at most once for a challenge reference and at most once for a challenge digest. A request from the same relying party that is identical to one openSig has already attested SHALL be answered with the stored attestation, unchanged, and SHALL NOT produce a second one. Two requests are identical when their challenge references and digests are equal as given and their proofs are equal in the RFC 8785 canonical form of the decoded proof, the form in which openWallet's ratified profile signs every unsigned field, its signature having one valid encoding; so re-serializing a proof never turns a retry into a refusal. A proof that does not pass the profile's strict decoding has no canonical form, and is compared by the SHA-256 of the bytes received. A request that repeats either the challenge reference or the digest and differs in anything else SHALL be refused. A `refused` or `unavailable` answer attests nothing, so a request after one is checked afresh.
 
 #### Scenario: The binding registry cannot be reached
 - **WHEN** openSig cannot reach the key binding registry while checking a proof
@@ -73,7 +90,7 @@ openSig SHALL NOT hold a wallet holder's private key, produce a proof for them, 
 - **THEN** the result is `not_verified` with a reason naming the fault
 
 #### Scenario: An identical retry returns the stored attestation
-- **WHEN** a relying party submits again, byte for byte, a request that openSig has already attested for it, because the first answer was lost
+- **WHEN** a relying party submits again a request that openSig has already attested for it, because the first answer was lost, with the same challenge reference and digest and the same proof, though serialized with its members in another order or with other whitespace
 - **THEN** openSig returns the stored attestation unchanged, issues no second attestation, and the practitioner need not sign again
 
 #### Scenario: A challenge reference is attested once

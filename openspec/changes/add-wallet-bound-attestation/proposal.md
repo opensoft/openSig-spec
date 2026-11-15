@@ -1,4 +1,4 @@
-Status: proposed. A draft for Brett Heap's review under his ruling 153; nothing here is ratified. Drafted on 2026-11-15 by Claude (Opus 5.5), and revised the same day after an independent review and a confirmation review.
+Status: proposed. A draft for Brett Heap's review under his ruling 153; nothing here is ratified. Drafted on 2026-11-15 by Claude (Opus 5.5), and revised the same day after an independent review, a confirmation review and a final check.
 
 ## Why
 
@@ -11,7 +11,7 @@ On 2026-11-15 the owner accepted the recommendation that openSig gets a draft of
 ## What Changes
 
 - Add a capability that, given a relying party's single-use challenge reference, a digest and a proof made under openWallet's ratified possession-only profile, verifies the proof with openWallet's own verification against the wallet key's current binding, and records the result as a signed, durable attestation.
-- An attestation states the wallet, the key and its fingerprint, the custody the key declares, the binding it was checked against with its public key, the proof itself, the digest, the relying party and its challenge reference, the time, the result and the verification used, so that the relying party can verify the sealed proof itself. It states nothing about the content behind the digest, the signer's licence, authority or consent, or whether a sign-off counts, and openSig never receives the content.
+- An attestation states, apart, what openSig was given (the relying party, its challenge reference, the digest and the proof) and what it resolved for itself (the binding the proof was checked against, with its public key and recomputed fingerprint, and the custody and states the key declares), with the time, the result and the verification used. A negative attestation names what openSig did not resolve and never fills it from the proof. Verifying an attestation is checking openSig's signature; only a `verified` result's sealed proof must verify, and the relying party verifies it itself. It states nothing about the content behind the digest, the signer's licence, authority or consent, or whether a sign-off counts, and openSig never receives the content.
 - Attestations are produced, and verified again later, inside the relying party's own deployment, with no outside call; the change says which keys and records the deployment holds for that.
 - openSig never holds a holder's key, signs in their place or approves for them. Its attestation key is a key of the deployment, used for nothing else. It fails closed with distinct results for a request it refuses, a proof that verified, a proof that did not, and a check it could not complete, and it attests at most once for a challenge reference and once for a digest, answering an identical retry with the stored attestation.
 - "Wallet" in this capability means an openWallet wallet, never an anchoring wallet.
