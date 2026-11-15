@@ -1,6 +1,6 @@
 ## 1. Governance and handoff
 
-- [ ] 1.1 One adversarial review of this revision of the proposal, design and delta (one independent review has already run, on the first draft at `aabc190`), reading against openWallet's ratified `wallet-challenge-proof`, openWallet's draft `add-practitioner-profile-and-licence-verification`, openChart-spec#5's sign-off (CA-04, CA-08, AN-14) and `add-corporate-signing-mvp`. Record each finding and its disposition in `design.md`.
+- [ ] 1.1 One adversarial review of this revision of the proposal, design and delta (two reviews have already run: an independent review of the first draft at `aabc190`, and a confirmation review of the revision at `34eed5e`), reading against openWallet's ratified `wallet-challenge-proof`, openWallet's draft `add-practitioner-profile-and-licence-verification`, openChart-spec#5's sign-off (CA-04, CA-08, AN-14) and `add-corporate-signing-mvp`. Record each finding and its disposition in `design.md`.
 - [ ] 1.2 **Owner:** rule on the thirteen open questions in `design.md`, the first two first, and dispose of the design calls WA-1 to WA-15.
 - [ ] 1.3 **Owner:** ratify or return. Brett Heap.
 - [ ] 1.4 Before ratifying, compare `design.md`'s section "The seam between openWallet and openSig" with the same section of openWallet's draft at the head being ratified there. They must be identical; a difference is resolved in both drafts first.

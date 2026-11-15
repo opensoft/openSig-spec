@@ -62,7 +62,7 @@ openSig SHALL produce a wallet-bound attestation inside the relying party's own 
 - **THEN** verifying it again fails
 
 ### Requirement: Never stand in for the holder, and fail closed with distinct results
-openSig SHALL NOT hold a wallet holder's private key, produce a proof for them, sign anything in their place or approve anything on their behalf. Its attestation key SHALL be a key of the deployment, used to sign wallet-bound attestations only, under a signing domain of its own, and never a document seal or any other signature. openSig SHALL fail closed on every doubt and SHALL answer every request with exactly one of: `refused`, with no check made and no attestation, for a request it does not accept; `verified`, with an attestation; `not_verified`, with an attestation of that result and a reason from a closed list; or `unavailable`, with no attestation and a reason, when it could not complete the check. It SHALL NOT turn `unavailable` into another result. For each relying party it SHALL attest at most once for a challenge reference and at most once for a challenge digest, and SHALL refuse a request that repeats either.
+openSig SHALL NOT hold a wallet holder's private key, produce a proof for them, sign anything in their place or approve anything on their behalf. Its attestation key SHALL be a key of the deployment, used to sign wallet-bound attestations only, under a signing domain of its own, and never a document seal or any other signature. openSig SHALL fail closed on every doubt and SHALL answer every request with exactly one of: `refused`, with no check made and no attestation, for a request it does not accept; `verified`, with an attestation; `not_verified`, with an attestation of that result and a reason from a closed list; or `unavailable`, with no attestation and a reason, when it could not complete the check. It SHALL NOT turn `unavailable` into another result. For each relying party it SHALL attest at most once for a challenge reference and at most once for a challenge digest. A request from the same relying party that is identical, byte for byte, to one openSig has already attested, in its challenge reference, its digest and its proof, SHALL be answered with the stored attestation, unchanged, and SHALL NOT produce a second one. A request that repeats either the challenge reference or the digest and differs in anything else SHALL be refused. A `refused` or `unavailable` answer attests nothing, so a request after one is checked afresh.
 
 #### Scenario: The binding registry cannot be reached
 - **WHEN** openSig cannot reach the key binding registry while checking a proof
@@ -72,13 +72,21 @@ openSig SHALL NOT hold a wallet holder's private key, produce a proof for them, 
 - **WHEN** a proof carries a duplicate key, an unknown field, a noncanonical signature or an unsupported profile
 - **THEN** the result is `not_verified` with a reason naming the fault
 
+#### Scenario: An identical retry returns the stored attestation
+- **WHEN** a relying party submits again, byte for byte, a request that openSig has already attested for it, because the first answer was lost
+- **THEN** openSig returns the stored attestation unchanged, issues no second attestation, and the practitioner need not sign again
+
 #### Scenario: A challenge reference is attested once
-- **WHEN** a relying party submits a challenge reference that openSig has already attested for it
+- **WHEN** a relying party submits a challenge reference that openSig has already attested for it, with a different digest or proof
 - **THEN** the request is `refused` with reason `challenge_already_attested`, and no second attestation is issued
 
 #### Scenario: A digest is attested once, whatever the challenge reference
 - **WHEN** a relying party submits a proof and a digest that openSig has already attested for it, with a new challenge reference
 - **THEN** the request is `refused` with reason `digest_already_attested`, and no second attestation is issued
+
+#### Scenario: A check that could not be completed is made afresh
+- **WHEN** a relying party resubmits a request whose earlier answer was `unavailable`
+- **THEN** openSig checks it afresh, because nothing was attested for it
 
 #### Scenario: openSig never signs for the holder
 - **WHEN** any caller asks openSig to produce a proof, or to sign a statement, in a wallet holder's place

@@ -1,6 +1,6 @@
 ## Context
 
-Drafted on 2026-11-15 by Claude (Opus 5.5), on Brett Heap's ruling 153, as a draft for his review, and revised the same day after an independent review. **Nothing here is ratified.** The owner's rulings quoted below are his decisions; every other choice in this change is a design call, marked PROPOSED where it is made and listed in "Design calls" below, so that it can be confirmed or overturned one by one.
+Drafted on 2026-11-15 by Claude (Opus 5.5), on Brett Heap's ruling 153, as a draft for his review, and revised the same day after an independent review and again after a confirmation review. **Nothing here is ratified.** The owner's rulings quoted below are his decisions; every other choice in this change is a design call, marked PROPOSED where it is made and listed in "Design calls" below, so that it can be confirmed or overturned one by one.
 
 The consumer is openChart's draft `define-clinical-acts-foundation` (openChart-spec#5, read at `d9a9c63`). Its practitioner's sign-off checks, among other things, that "the openSig attestation verifies against that wallet, over the SHA-256 of the sign-off statement" (its CA-04). Nothing in openSig provides that today, so every sign-off fails closed and drafts stay drafts (its AN-14; ruling 152). This change specifies the attestation. openWallet's draft `add-practitioner-profile-and-licence-verification` specifies the licence verification and what a sign-off's proof is. The two share one seam, stated in the same words in both designs.
 
@@ -67,7 +67,7 @@ This change uses these words in these senses, and no other (PROPOSED, WA-1).
 
 - **a sealed record of the binding and the time.** openWallet's profile verifies a proof against the CURRENT binding, and "an old proof refuses" once a binding is revoked, expired or revised. The attestation seals the proof with the binding it was checked against and the time it was checked, so the result can be shown again after the practitioner's key has rotated;
 - **a single-purpose key in a separate process.** The attester signs with a key used for nothing else, held by a component other than the chart's application;
-- **a second check, and replay refusal.** The attester runs openWallet's verification itself, and refuses a challenge reference or a digest it has attested before (W8).
+- **a second check, and replay refusal.** The attester runs openWallet's verification itself, and refuses a request that repeats a challenge reference or a digest it has attested and differs in anything else; an identical retry gets the stored attestation (W8).
 
 What it does **not** add, and must not be read as adding:
 
@@ -89,7 +89,7 @@ openSig receives a challenge reference, a digest and a proof from an authenticat
 
 The profile already refuses a changed challenge digest, binding, signature or profile; duplicate JSON keys; unknown fields; noncanonical signatures; unsupported algorithms; inline public keys; a proof whose references differ from its binding's; and a binding that is revoked, expired or revised. openSig maps each refusal to a `not_verified` reason (W6), and adds none of its own about the proof's cryptography.
 
-**What openSig cannot check, and says so.** It never sees the statement, so it cannot check that the challenge reference it was given is the one inside the statement behind the digest. It records the challenge reference as the relying party gave it, and refuses a repeat of either the reference or the digest (W8). The relying party, which issued the challenge and wrote the statement, checks that the sealed challenge reference is its statement's, and stays the challenge's owning issuer: the profile says "The owning issuer enforces freshness, caller binding and one-use."
+**What openSig cannot check, and says so.** It never sees the statement, so it cannot check that the challenge reference it was given is the one inside the statement behind the digest. It records the challenge reference as the relying party gave it, and refuses a different request that repeats either the reference or the digest (W8). The relying party, which issued the challenge and wrote the statement, checks that the sealed challenge reference is its statement's, and stays the challenge's owning issuer: the profile says "The owning issuer enforces freshness, caller binding and one-use."
 
 ### W3 — What an attestation states (PROPOSED, WA-4)
 
@@ -139,7 +139,7 @@ Ruling 156 puts the check "Inside the practice's own deployment, so the chart ne
 
 Nothing else is contacted or waited on: no hosted openSig, no openWallet service outside the deployment, no directory and no ledger. The practitioner's key stays in the practitioner's custody; producing the proof needs it, checking the proof does not.
 
-**At acceptance and when verifying again,** the relying party needs only items 4 and 5. It checks openSig's signature over the attestation; verifies the sealed proof itself with openWallet's verification, under the sealed binding's public key, over the digest it recomputes from its own statement; checks that the sealed fingerprint is a key it bound and that a licence verification names; and checks that the sealed challenge reference is its statement's. Verifying again later establishes what was true at `attested_at`, and says so: it never claims the binding is still current.
+**At acceptance and when verifying again,** the relying party needs items 4 and 5 and two records of its own: its bindings of keys to the signer's account, and the licence verification it relies on, with the held verifier key and revocation list it checks it against (openWallet's draft). It needs nothing from the attester beyond the attestation. It checks openSig's signature over the attestation; verifies the sealed proof itself with openWallet's verification, under the sealed binding's public key, over the digest it recomputes from its own statement; checks that the sealed fingerprint is a key it bound and that a licence verification names; and checks that the sealed challenge reference is its statement's. Verifying again later establishes what was true at `attested_at`, and says so: it never claims the binding is still current.
 
 REJECTED:
 
@@ -177,7 +177,7 @@ openSig never turns `unavailable` into another result, and treats any doubt it c
 
 ### W8 — One attestation per challenge reference, and one per digest (PROPOSED, WA-9)
 
-For each relying party, openSig keeps the challenge references and the challenge digests it has attested, and refuses a repeat of either: `challenge_already_attested` or `digest_already_attested`. The digest is the key that matters, because the proof binds it and openSig cannot check the reference against the statement: without it, the same proof and digest submitted with a fresh reference would get a second `verified` attestation. The relying party stays the challenge's owning issuer and enforces one use itself (openChart's CA-04 and CA-08 do); openSig's refusal is a second line, local to the deployment.
+For each relying party, openSig keeps the challenge references and the challenge digests it has attested, with the attestation each produced. A request identical, byte for byte, to one already attested (the same challenge reference, digest and proof, from the same relying party) gets the stored attestation back, unchanged, and no second one is made: if an answer is lost on the way, the retry does not make the practitioner sign again. A request that repeats the reference or the digest and differs in anything else is refused: `challenge_already_attested` or `digest_already_attested`. A `refused` or `unavailable` answer attests nothing, so a request after an outage is checked afresh. The digest is the key that matters, because the proof binds it and openSig cannot check the reference against the statement: without it, the same proof and digest submitted with a fresh reference would get a second `verified` attestation. The relying party stays the challenge's owning issuer and enforces one use itself (openChart's CA-04 and CA-08 do); openSig's refusal is a second line, local to the deployment.
 
 ### W9 — "Wallet" is never the anchoring wallet (PROPOSED, WA-10)
 
@@ -249,18 +249,18 @@ core's "consuming domain"; the two words name one party.
 **The aim, put to the owner.** Nobody in the practice, including whoever runs
 its deployment, can produce a sign-off in a practitioner's name that an honest
 check accepts without that practitioner's key. Its limits are stated as
-plainly: whoever runs the deployment can still delete or hide records, run
-altered software that skips the checks, and back-date within what its own
-clock allows. An honest check is one run on a copy of the records with the
-verifier keys from a release of the relying system. Outside evidence of time
-is a successor.
+plainly: whoever runs the deployment can still delete or hide records,
+withhold revocation lists, run altered software that skips the checks, refuse
+service, and back-date within what its own clock allows. An honest check is
+one run on a copy of the records with the verifier keys from a release of the
+relying system. Outside evidence of time is a successor.
 
 | Question | The answer both drafts give |
 |---|---|
 | What identifies a wallet | The `wallet_id` of its openWallet wallet record. It is `wallet_ref` in a proof and in an attestation, and `openwallet_id` in openChart's sign-off evidence. It is attestation, never the identifier of a person or a patient. |
 | What identifies a key | The pair (`did`, `key_id`) under which the wallet declares it, and its `key_fingerprint`: `sha256:` and the lowercase hex SHA-256 of the raw public key, openWallet's one spelling. It is `key_ref` in a proof, written as the DID URL `<did>#<key_id>`. An attestation records the reference and the fingerprint recomputed from the public key that the binding named. |
 | Which keys may make a sign-off | Only a key that the relying party bound to the practitioner's account individually, by that key's own proof of possession in the practitioner's own session, and whose fingerprint a licence verification in force names. The relying party takes its held copy of the wallet record only from the practitioner, and no administrator adds a key to it. Each bound key has its own binding; with a registry that keeps one current binding per subject, the subject is that account's binding of that key. Replacing a key is a new binding and needs a verification that names the new key. |
-| What custody a key declares | One model of openWallet's closed custody registry (`openxwallet-custody`, registry version 1), declared for that key in its wallet record: `holder_readable`, `isolated_invocable` or `isolated_per_use_authorized`. In a binding used for a sign-off, the custody reference is `openxwallet-custody:<registry_version>:<model>` and equals the model the held wallet record declares for that key; openSig's `custody_reference_mismatch` compares those two. Only `isolated_per_use_authorized` evidences that the holder acted, and only where each use is authorized on the device that holds the key, never by a code typed into the computer that asks for the signature. A wallet may declare such a key only if its own custody is the same model, because no declared key may outrank its wallet. A declaration is not proof: neither openWallet's proof nor openSig's attestation shows that a key's custody is what the wallet declares. |
+| What custody a key declares | One model of openWallet's closed custody registry (`openxwallet-custody`, registry version 1), declared for that key in its wallet record: `holder_readable`, `isolated_invocable` or `isolated_per_use_authorized`. In a binding used for a sign-off, the custody reference is `openxwallet-custody:<registry_version>:<model>` and equals the model the held wallet record declares for that key; openSig's `custody_reference_mismatch` compares those two. Only `isolated_per_use_authorized` evidences that the holder acted, and only where each use is authorized on the device that holds the key, never by a code typed into the computer that asks for the signature; for a sign-off, that narrows the registry's own definition, which also admits an external policy approval or a separate custodian. A wallet may declare such a key only if its own custody is the same model, because no declared key may outrank its wallet. A declaration is not proof: neither openWallet's proof nor openSig's attestation shows that a key's custody is what the wallet declares, or that its uses are authorized on the device, and nothing can until a custody-acceptance record exists. |
 | Which custody a sign-off needs | The relying party decides. openChart's draft proposes (its design call CD-48) to accept only `isolated_per_use_authorized` for a practitioner's sign-off. openSig records the model the key declares and never raises it. |
 | What the proof is made over | openWallet's ratified possession-only profile `wallet-challenge-proof`: profile constant `openwallet.challenge-proof.v0`; Ed25519 over the domain separator `openWallet.challenge-proof.v0` and a NUL byte, then the RFC 8785 canonical form of every unsigned proof field. Its `challenge_digest` is `sha256:` and the SHA-256 of the relying party's RFC 8785 canonical statement, which carries the relying party's single-use challenge. For openChart that statement is the sign-off statement, and the digest is its `statement_sha256`. The challenge reference is an opaque random value, 32 random bytes in unpadded base64url, that carries no meaning. The proof also binds the wallet, the key, the subject, the custody reference, the binding and its revision. openSig is given the digest and the challenge reference, never the statement. |
 | Who owns consent | The relying party. A sign-off is consent to an exact request, and openWallet's ratified profile does "not assert MFA, human presence, explicit human consent, workload composition, delegation or domain permission". The relying party evidences what the signer was shown, refusing a signature over a digest that differs from it; re-authentication at signing; and, through the custody it accepts, per-use authorization at the key. Neither the proof nor the attestation is consent. |
@@ -282,7 +282,7 @@ Every call below goes beyond the owner's words and is PROPOSED, and each is put 
 | WA-6 | The attester, the binding registry, the held wallet records, the attestation keys and the attestations are held inside the deployment; at acceptance the relying party verifies the sealed proof itself; verifying again never claims currency. | W5 |
 | WA-7 | Four results with closed reasons; `not_verified` is signed, `refused` and `unavailable` are not; what `custody_reference_mismatch` and `clock_untrusted` test. | W6 |
 | WA-8 | The attestation key is a key of the deployment, not of a wallet, evidencing at best the attester's environment; Ed25519 over RFC 8785 with its own signing domain; retired keys kept. | W7 |
-| WA-9 | One attestation per relying party's challenge reference and one per challenge digest. | W8 |
+| WA-9 | One attestation per relying party's challenge reference and one per challenge digest; an identical retry gets the stored attestation, and any other repeat is refused. | W8 |
 | WA-10 | "Wallet" is an openWallet wallet, never the anchoring wallet; anchoring digests stays beside the attestation path. | W9 |
 | WA-11 | Consistent with feature 001 and the project rules, and changes nothing in them. | W10 |
 | WA-12 | Stacked on pull request #2. | W11 |
@@ -294,7 +294,7 @@ Every call below goes beyond the owner's words and is PROPOSED, and each is put 
 
 - **T1. The attester runs under the practice's operator.** Ruling 156 puts it inside the deployment, so it adds no independence from whoever runs it, and no outside evidence of time (W1; Open question 1).
 - **T2. openSig's scope widens.** openSig is a document-signing platform, and this capability signs no document. It fits openSig's role as the place signing evidence is made, and it attests no clinical fact, but it is a second kind of thing in the project.
-- **T3. openSig cannot see what the challenge reference belongs to.** It records the reference as given and refuses repeats of the reference and of the digest (W2, W8); only the relying party can check it against the statement.
+- **T3. openSig cannot see what the challenge reference belongs to.** It records the reference as given and refuses a different request that repeats the reference or the digest (W2, W8); only the relying party can check it against the statement.
 - **T4. One more component in a small practice's deployment.** Ruling 156 requires it to run there (Open question 10).
 - **T5. Verifying again does not restore currency.** It shows what was true when the attestation was made, which is what an audit needs, and not that the key is still bound (W5).
 - **T6. The pull request is stacked on two unmerged pull requests** (W11).
@@ -305,7 +305,7 @@ Each is a judgment the author made, or a choice the owner must make, with a reco
 
 1. **What is the attestation worth, given that it runs under the practice's operator?** The options are W1's: (a) as specified; (b) the same, with attestation digests optionally anchored, as a successor, for outside evidence against back-dating, never blocking signing; (c) the same, with the attester under a separate administrator. Recommendation: (a) now, with (b) as a named successor. The attestation is a sealed record of the binding and the time under a single-purpose key in a separate process, which ruling 151's "the openSig will attest" asks for; it is not protection against the operator, and openWallet's draft states that threat model's aim and limits.
 2. **Who evidences exact-request consent?** Recommendation: the relying party, as openWallet's ratified profile's record says; openSig's attestation claims none, and says so (W4).
-3. **Refuse repeats of both the challenge reference and the digest?** Recommendation: yes; the digest is the one the proof binds (W8).
+3. **Refuse repeats of both the challenge reference and the digest?** Recommendation: yes, for any repeat that differs in anything; the digest is the one the proof binds. An identical retry gets the stored attestation, so a lost answer never makes the practitioner sign again (W8).
 4. **How is the attestation key held?** Recommendation: a key of the deployment, used for nothing else, that the attester's own application process cannot read; it evidences the attester's environment at best and is never declared in an openWallet wallet (W7); retired public keys kept by the relying party.
 5. **How long are attestations, and the attester's record of attested references and digests, kept?** Recommendation: for as long as the records they support, under whatever retention rule counsel sets for those records.
 6. **Sign `not_verified` results?** Recommendation: yes, as evidence of failed attempts; never `refused` or `unavailable`, where there is nothing to attest.
@@ -313,10 +313,10 @@ Each is a judgment the author made, or a choice the owner must make, with a reco
 8. **The relying party's credential to the attester.** Recommendation: mutual TLS inside the deployment, with the client certificate pinned by fingerprint (W12).
 9. **Placement.** Recommendation: stay stacked on pull request #2, and retarget to `main` once #1 and #2 merge.
 10. **How does a small practice run the attester?** Recommendation: as a small service deployed beside openChart, under the practice's operator; never a hosted openSig. Option (c) of Open question 1 would change who administers it.
-11. **How should openChart use the four results?** Recommendation, as openChart's own decision: record which result and reason each failed attempt had; treat `unavailable` and `not_verified` as AN-14 already does; and raise a `not_verified` with reason `signature_invalid` or `digest_mismatch`, and any `digest_already_attested`, to the medical director as a possible forgery or replay.
+11. **How should openChart use the four results?** Recommendation, as openChart's own decision: record which result and reason each failed attempt had; treat `unavailable` and `not_verified` as AN-14 already does; and raise a `not_verified` with reason `signature_invalid` or `digest_mismatch`, and any `digest_already_attested`, to the medical director as a possible forgery or replay, and never to the signer alone (openWallet's draft names a second recipient where the signer is the medical director).
 12. **The names that become machine keys** (W12). Recommendation: confirm or change them now.
 13. **Should an attestation carry the relying party's statement type or purpose?** Recommendation: no. openSig receives only the digest; keeping statements of different purposes apart is the relying party's statement's job.
 
 ## Status
 
-Proposed. One independent review has run, on the first draft at `aabc190`; this revision answers its findings. `tasks.md` 1.1 still schedules an adversarial reviewer over this revision before ratification. Ratification is pending, by Brett Heap.
+Proposed. Two reviews have run: an independent review of the first draft at `aabc190`, and a confirmation review of the revision at `34eed5e`; this revision answers both. `tasks.md` 1.1 still schedules an adversarial reviewer over this revision before ratification. Ratification is pending, by Brett Heap.
