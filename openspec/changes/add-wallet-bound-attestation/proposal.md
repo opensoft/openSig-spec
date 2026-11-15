@@ -1,4 +1,4 @@
-Status: proposed. A draft for Brett Heap's review under his ruling 153; nothing here is ratified. Drafted on 2026-11-15 by Claude (Opus 5.5).
+Status: proposed. A draft for Brett Heap's review under his ruling 153; nothing here is ratified. Drafted on 2026-11-15 by Claude (Opus 5.5), and revised the same day after an independent review.
 
 ## Why
 
@@ -11,9 +11,9 @@ On 2026-11-15 the owner accepted the recommendation that openSig gets a draft of
 ## What Changes
 
 - Add a capability that, given a relying party's single-use challenge reference, a digest and a proof made under openWallet's ratified possession-only profile, verifies the proof with openWallet's own verification against the wallet key's current binding, and records the result as a signed, durable attestation.
-- An attestation states the wallet, the key and its fingerprint, the custody the key declares, the binding it was checked against, the digest, the relying party and its challenge reference, the time, the result and the verification used. It states nothing about the content behind the digest, the signer's licence or authority, or whether a sign-off counts, and openSig never receives the content.
+- An attestation states the wallet, the key and its fingerprint, the custody the key declares, the binding it was checked against with its public key, the proof itself, the digest, the relying party and its challenge reference, the time, the result and the verification used, so that the relying party can verify the sealed proof itself. It states nothing about the content behind the digest, the signer's licence, authority or consent, or whether a sign-off counts, and openSig never receives the content.
 - Attestations are produced, and verified again later, inside the relying party's own deployment, with no outside call; the change says which keys and records the deployment holds for that.
-- openSig never holds a holder's key, signs in their place or approves for them. It fails closed with distinct results for a request it refuses, a proof that verified, a proof that did not, and a check it could not complete.
+- openSig never holds a holder's key, signs in their place or approves for them. Its attestation key is a key of the deployment, used for nothing else. It fails closed with distinct results for a request it refuses, a proof that verified, a proof that did not, and a check it could not complete, and it attests at most once for a challenge reference and once for a digest.
 - "Wallet" in this capability means an openWallet wallet, never an anchoring wallet.
 - Feature 001 and its change `add-corporate-signing-mvp` are unchanged.
 
@@ -29,7 +29,7 @@ None. `corporate-signing-mvp` (proposed in `add-corporate-signing-mvp`) is uncha
 
 ## Impact
 
-What the rulings settle, what this change proposes beyond them (marked PROPOSED in `design.md`), and the open questions for the owner are in `design.md`. Implementation would belong in openSig-code; canonical governance and feature files belong in openSig-spec. The realization depends on openWallet's verification of its possession-only profile, pinned through openWallet's assembly root, and on openWallet's draft practitioner profile for the seam both drafts share. No Hermes, healthcare or production configuration is changed, no key is created, and no contract, code or release file changes. This change is stacked on the unmerged foundation pull requests #1 and #2, whose OpenSpec instance it uses; it changes nothing they own.
+What the rulings settle, what this change proposes beyond them (marked PROPOSED in `design.md`), and the open questions for the owner are in `design.md`. It states plainly what the attestation adds (a sealed record of the binding and the time, under a single-purpose key in a separate process) and what it does not (independence from whoever runs the deployment, or outside evidence of time). Implementation would belong in openSig-code; canonical governance and feature files belong in openSig-spec. The realization depends on openWallet's verification of its possession-only profile, pinned through openWallet's assembly root, and on openWallet's draft practitioner profile for the seam both drafts share. No Hermes, healthcare or production configuration is changed, no key is created, and no contract, code or release file changes. This change is stacked on the unmerged foundation pull requests #1 and #2, whose OpenSpec instance it uses; it changes nothing they own.
 
 ## Handoff
 
