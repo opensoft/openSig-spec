@@ -1,4 +1,4 @@
-Status: proposed. A draft for Brett Heap's review under his ruling 153; nothing here is ratified. Drafted on 2026-11-15 by Claude (Opus 5.5), and revised the same day after an independent review, a confirmation review and a final check.
+Status: proposed. A draft for Brett Heap's review under his ruling 153; nothing here is ratified. Drafted on 2026-11-15 by Claude (Opus 5.5), and revised the same day after an independent review, a confirmation review and a final check, and again after his rulings 208, 209 and 214.
 
 ## Why
 
