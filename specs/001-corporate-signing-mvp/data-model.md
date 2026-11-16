@@ -49,8 +49,9 @@ The exported-head ledger is one file beside the backups, on the local filesystem
 1. **Single locked writer path.** Every ledger write, by backup, by first restore, or by any future receipt writer, goes through `src/storage/backup/ledger.ts`:
    - Take an exclusive lock: `${ledger}.lock`, created with O_CREAT|O_EXCL, recording pid, hostname, start time and a random nonce.
    - **Lock session (A-010).**
+     - A writer takes the lock only if its own `/proc/self/fd` is owned by its effective uid, so that its descriptors can be inspected; otherwise it refuses (A-010, T30R3-4).
      - The owner keeps the lock file descriptor open for the whole session, from the O_EXCL create until release.
-     - Release first checks that the path's device and inode still equal those of the held descriptor, then unlinks the path and closes the descriptor. On a mismatch it never unlinks the path, and it reports the lock as lost.
+     - Release first checks that the path's device and inode still equal those of the held descriptor, then unlinks the path and closes the descriptor. On a mismatch it never unlinks the path and reports `lock-lost` (exit 70). That exit code takes precedence over the outcome's own, and the status line still names the underlying outcome and its recovery command. The operator runs verify before trusting that outcome (A-010, T30R3-3).
      - Every session path releases, error paths included. Only a crash leaves a lock behind.
    - Re-read the ledger and its digest.
    - Check ancestry for every tenant.
@@ -58,10 +59,11 @@ The exported-head ledger is one file beside the backups, on the local filesystem
 
    Lock contention refuses at once and never waits silently. A stale lock is never broken automatically. Only an explicit operator `--break-lock <nonce>` can break it, and only when the nonce matches, the recorded host is this host, and the recorded pid is not alive. A **damaged lock** (empty, truncated or unparseable, as a crash between the O_EXCL create and its fsync leaves it) has no nonce. Only `--break-lock damaged` can break it, and only when all of these hold:
    - the content still does not parse as a lock record;
+   - the lock file is owned by the invoking user;
    - the file is older than 60 seconds;
    - no process of the invoking user on this host holds a descriptor whose `/proc/<pid>/fd` entry resolves to the lock's device and inode. Because the owner holds the descriptor for the whole session, this proves that no live writer owns the lock.
 
-   If `/proc` cannot be read, or any of the user's processes cannot be inspected, it refuses and names those pids. Immediately before acting, it re-checks that the file is the same (device, inode and digest). It moves the file aside to `${ledger}.lock.damaged-<time>` instead of deleting it, and reports the path. It never breaks a lock that parses; such a lock goes only through `--break-lock <nonce>` (T30R2-1, A-010). No other module writes the ledger file. Multi-host and shared-storage (for example NFS) backup is out of MVP scope.
+   A process of the user whose descriptors cannot be inspected, such as a non-dumpable ssh-agent, cannot own the lock, because writers refuse to take the lock unless they can be inspected. Such a process is skipped and named in the report. If `/proc` itself cannot be read, the break refuses. Writers and the break run as the same user, in the same PID namespace, on the single host (A-010, T30R3-4). Immediately before acting, it re-checks that the file is the same (device, inode and digest). It moves the file aside to `${ledger}.lock.damaged-<time>` instead of deleting it, and reports the path. It never breaks a lock that parses; such a lock goes only through `--break-lock <nonce>` (T30R2-1, A-010). No other module writes the ledger file. Multi-host and shared-storage (for example NFS) backup is out of MVP scope.
 2. **All or nothing.** A multi-tenant backup records every tenant's new head in that one replace, after every tenant has verified. Any refusal or failure before the commit point (rule 3) leaves the ledger byte-identical and the previous published backup restorable.
 3. **Commit point and publish ordering.** The **commit point** is the ledger's atomic replace: the fsynced temp file is renamed over the ledger, and the ledger directory is fsynced. Everything before that rename is pre-commit. From the moment the rename returns, the run is post-commit, even if the directory fsync then fails, because the ledger may already show the new heads.
    1. Write the backup into a staging directory (`.staging-*`).
@@ -104,9 +106,11 @@ The exported-head ledger is one file beside the backups, on the local filesystem
    | `refused` | 1 | Any pre-commit refusal or failure, or a refused recovery; this run left the ledger byte-identical |
    | `committed-pending-publication` | 75 | A post-commit publication failure, or a pending committed staging; staging is preserved |
    | `committed-unsynced` | 74 | A non-backup ledger write passed the rename, but its ledger-directory fsync failed; the new ledger is visible and not known to be durable |
+   | `lock-lost` | 70 | At release, the lock path no longer matched the held descriptor; the underlying outcome is still reported |
+   | usage error | 2 | Bad or conflicting arguments, detected before any lock is taken; nothing is written |
    | `ledger-synced` | 0 | `--resync-ledger` re-committed the current ledger bytes |
 
-   Exit 75 means only `committed-pending-publication`. Exit 74 means only `committed-unsynced`.
+   Exit 75 means only `committed-pending-publication`. Exit 74 means only `committed-unsynced`. Exit 70 means only `lock-lost`. Exit 2 means only a usage error. A refusal found during a run, such as a database appearing at the restore target (never overwritten), is `refused` (exit 1) (A-010, T30R3-5).
 4. **First runs.** A missing ledger refuses backup, verify and restore unless `--first-backup` or `--first-restore` is given. Damaged ledgers are refused even with those flags.
    - `--first-backup` creates the ledger, empty when no tenant has audit events yet.
    - `--first-restore` writes the restored heads under the lock, all or nothing, so the next backup needs no flag. It restores the database first and writes the ledger as its last step (T30D-3, ratified in A-010). A failure before the commit point removes only the database files this run created, never touches a database that existed before the run, and leaves the ledger byte-identical (`refused`). After the commit point, the restored database is never removed.
@@ -145,9 +149,9 @@ The exported-head ledger is one file beside the backups, on the local filesystem
 
    The publish transaction then inserts the immutable FinalArtifact with `package_digest` and the package blob ref. The `envelope.completed` event, written in that transaction, comes after the receipt's chain head and is not in the receipt. The contract's "chain head at completion" means this head. Its wording is aligned at the next contract version bump, with no schema change. A publish whose fencing token is stale (the lease expired and another attempt took over) is rejected and leaves no trace. Every blob an attempt writes is first recorded as a FinalizationAttemptBlob. Blobs of abandoned attempts are collected by the orphan collector (T038, `src/storage/retention/orphans.ts`) under the rule in that entity, which writes a DisposalRecord and an audit event. They are never mixed into a published artifact, because the artifact row references one attempt's digests.
 3. **Failure.** A failure moves the job to `retryable`, with bounded exponential `retry_at`, until `max_attempts` is reached; it then becomes `failed`. The envelope stays `finalizing` and the failure is visible. `retryFinalization` is allowed **only** from `retryable` or `failed`; otherwise it returns 409 `finalization_not_retryable`. Retry never creates approvals.
-4. **Outbox.** Completion publishes one outbox event ID, and delivery retries keep that ID. A delivery success that arrives after the event reached `attempts_exhausted` is still recorded as its acknowledgement, so the evidence of delivery is kept. The event stays `attempts_exhausted`, is never relabelled, and gets no further attempts (T30R2-6, A-010).
+4. **Outbox.** Completion publishes one outbox event ID, and delivery retries keep that ID. A delivery success that arrives after the event was abandoned, whether by `attempts_exhausted` or by `retry_horizon_passed`, is still recorded as its acknowledgement, so the evidence of delivery is kept. The event keeps its abandon state, is never relabelled, and gets no further attempts (T30R2-6 and T30R3-2, A-010).
 5. **Reissue.** Reissue always creates a new envelope linked to the prior one (`reissue_of`/`reissued_as`). It copies the source, recipients and document, never the approvals, and revokes every outstanding capability of the prior envelope.
-6. **Retention.** Retention and disposal never mutate completed evidence in place. Expiry, archive and disposal follow the tenant's configured retention and write a DisposalRecord plus an audit event. When retention is unset, nothing is disposed.
+6. **Retention.** Retention and disposal never mutate completed evidence in place. Reference checks inside a disposal transaction use indexed lookups, never a table scan. T003 indexes `document_revisions(tenant_id, blob_ref)` and `(tenant_id, <column>)` for every blob-ref column of `final_artifacts` (A-010, T30R3-1). Expiry, archive and disposal follow the tenant's configured retention and write a DisposalRecord plus an audit event. When retention is unset, nothing is disposed.
 
 ## Authentication and secrets
 
