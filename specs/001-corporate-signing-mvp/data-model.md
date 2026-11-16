@@ -30,7 +30,7 @@ Revision 2026-11-08 (M4). The API shapes are in [http-api.yaml](contracts/http-a
 | RecipientSession | id, value hash (raw value only in the cookie), tenant/envelope/recipient/revision/manifest binding, csrf secret, created_at, last_seen_at (idle expiry 30 min), revoked_at |
 | Approval | id, recipient_id unique, document_digest, manifest_digest, prior_approval_digest (null for ordinal 1), consent_version, consent_text_digest, typed field values (drawn strokes as integer fixed-point coordinates 0..10000, at most 15,000 points per approval so the compact body fits the 256 KiB JSON limit (contract 0.2.3); typed text; server-filled dates), field_values_digest, assurance {mailbox-challenge, mailbox-control}, server_time, approval_digest = SHA-256(JCS(record without approval_digest)); immutable, tenant-bound |
 | IdempotencyRecord | tenant_id, route, principal ref, key, request digest, response status/body digest, created_at; unique (tenant, route, principal, key) |
-| SigningJob | envelope_id unique, reserved_version, status `pending`/`running`/`retryable`/`failed`/`succeeded`, attempt_count, max_attempts, **lease_owner, lease_expires_at, fencing_token** (= attempt_count at lease grant), retry_at (bounded exponential), last_error_code; no secret traces |
+| SigningJob | envelope_id unique, reserved_version (the envelope version written by the reservation transaction, that is, the transition into `finalizing`; A-010), status `pending`/`running`/`retryable`/`failed`/`succeeded`, attempt_count, max_attempts, **lease_owner, lease_expires_at, fencing_token** (= attempt_count at lease grant), retry_at (bounded exponential), last_error_code; no secret traces |
 | FinalArtifact | envelope_id unique, artifact_id, artifact_digest (SHA-256 of final.pdf), package_digest (SHA-256 of the ZIP), approved_composition_digest, PDF/evidence/package blob refs, signer certificate SHA-256, development_certificate flag, verifier name/version/results, fencing_token of the publishing attempt, approval_evidence_digest; immutable. **Evidence binding (A-008, S1).** approval_evidence_digest = SHA-256 of the RFC 8785 form of approval-manifest.json without `final_pdf_digest`. The manifest is built before sealing, after the `envelope.seal_started` audit anchor is written. The digest is committed inside the seal as the CMS signed attribute `opensig-approval-evidence-digest` (OID 2.25.254263291653419018820250361524609646248) |
 | VerificationReport | artifact_digest, integrity, trust, trust_anchor_ref, revision_coverage, seal_type `organization`, timestamp_status (`absent` until implemented), revocation_status (`not-checked` until implemented), verifier, verified_at, checks; produced by `src/verifier/` only |
 | AuditEvent | tenant hash chain: seq (monotonic per tenant), type, actor {kind, ref}, server_time, subject_digest, redacted metadata, prev_digest, event_digest = SHA-256(JCS(event without event_digest)); append-only through one restricted writer; never contains capability values, codes, keys or PDF content Digest preimage (T029): `{schema: "opensig.audit-event/1", tenant_id, seq, type, actor {kind, ref}, server_time, envelope_id, subject_digest, metadata, prev_digest}`, with null for an absent envelope_id, subject_digest or prev_digest. The audit receipt carries exactly this preimage plus event_digest for each event (contract `AuditEventRecord`), so any holder can recompute the digest. metadata is already redacted at write time, so exposing it reveals nothing unredacted. |
@@ -130,6 +130,17 @@ The exported-head ledger is one file beside the backups, on the local filesystem
 | `expired` | The expiry sweeper or a request finds expires_at passed (before reservation), with the same CAS | Terminal; reissue allowed |
 | `voided` | voidEnvelope before reservation | Terminal; reissue allowed. After reservation, void returns 409 |
 
+**Transition graph (A-010).** The graph governs every UPDATE that changes `state`. These are the only legal transitions:
+- `draft` → `prepared`, `voided` or `expired`;
+- `prepared` → `sent`, `voided` or `expired`;
+- `sent` → `in-progress`, `finalizing`, `declined`, `voided` or `expired`;
+- `in-progress` → `finalizing`, `declined`, `voided` or `expired`;
+- `finalizing` → `completed`.
+
+`completed`, `declined`, `expired` and `voided` are terminal. A finalization failure leaves the envelope in `finalizing`. An update that keeps the state is not a transition; the freeze and version rules govern it.
+
+**Inserts.** The graph does not govern inserts. Storage-level inserts in any state the existing CHECK and FK constraints admit stay allowed, for fixtures and for restore. Domain code (create and reissue) inserts only `draft` at version 1.
+
 **Recipient status.**
 - `pending → invited` happens at send for ordinal 1, or after the prior approval for ordinal 2.
 - From `invited`, a recipient moves to `approved` or `declined`.
@@ -138,7 +149,7 @@ The exported-head ledger is one file beside the backups, on the local filesystem
 
 ## Transitions and races
 
-1. **Single CAS path.** Approval, decline, expiry, void and the finalization reservation all compare and set (state, version) inside one `BEGIN IMMEDIATE` transaction. Exactly one wins; losers get 409 and leave no partial record. **Version (A-010).** Create sets `version` to 1. Each successful operation that changes the envelope's state or content, upload and prepare included, increments it by exactly 1 inside its transaction. A refused request, a read and an idempotent replay leave it unchanged.
+1. **Single CAS path.** Approval, decline, expiry, void and the finalization reservation all compare and set (state, version) inside one `BEGIN IMMEDIATE` transaction. Exactly one wins; losers get 409 and leave no partial record. **Version (A-010).** Create sets `version` to 1. Each successful operation that changes the envelope's state or content, upload and prepare included, increments it by exactly 1 inside its transaction. A refused request, a read and an idempotent replay leave it unchanged. Every envelope column except `updated_at` counts as state or content. The version only ever moves by exactly +1, and any state or content change requires that +1. A storage update of `updated_at` alone may leave the version unchanged, as DB-28 shows (A-010).
 2. **Finalization runner** (`src/jobs/`). The runner acquires a lease (`lease_owner`, `lease_expires_at`) and increments `attempt_count`, which becomes the `fencing_token`. It then runs compose, seal, verify, storage of the PDF and evidence under content-addressed keys, and package assembly; these steps are idempotent. Finally it publishes. **Package assembly (A-010, S4).** After verification and evidence storage, and before the publish transaction, the attempt:
    1. writes the completion checkpoint;
    2. builds audit-receipt.json from every event of the envelope up to the tenant chain head at that moment;
