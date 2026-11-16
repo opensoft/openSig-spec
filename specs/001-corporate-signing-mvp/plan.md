@@ -361,7 +361,7 @@ Void can win only before the finalizing reservation. Later cancellation returns 
 
 ## Project Structure
 
-The spec feature owns spec.md, plan.md, research.md, data-model.md, contracts/, quickstart.md, tasks.md and checklists/. governance-baseline.md is a byte-identical snapshot of the planning constitution (sha256 `eec589f3…`), kept so the baseline travels with the spec leg. The OpenSpec proposal/delta remains in the spec leg and hands off here. Code implementation is in the paired code worktree:
+The spec feature owns spec.md, plan.md, research.md, data-model.md, contracts/, quickstart.md, tasks.md, checklists/ and receipts/ (Phase 2 close receipts, A-010). governance-baseline.md is a byte-identical snapshot of the planning constitution (sha256 `eec589f3…`), kept so the baseline travels with the spec leg. The OpenSpec proposal/delta remains in the spec leg and hands off here. Code implementation is in the paired code worktree:
 
 ```text
 src/server/              HTTP entrypoint, router, input limits, security headers, log redaction (T031)

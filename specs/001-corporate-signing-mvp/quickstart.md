@@ -33,6 +33,11 @@ npm run verify -- acceptance             # release gate only; FAILS while any ga
 - `VACUOUS` (4) means no real tests ran: missing tests, skips, todo or a missing case ID.
 - Any other non-zero status is a failure.
 
+**Configuration (service settings).**
+- `OPENSIG_DATA_DIR`: the service data directory.
+- `OPENSIG_DATABASE`: the SQLite database path, defaulting to `$OPENSIG_DATA_DIR/opensig.db` (T031, SEC-07). The server refuses to start when the deployment configuration and the tenants table disagree.
+- `OPENSIG_PARSER_ALLOW_UNSANDBOXED=1`: development only; it permits the unsandboxed parser only when namespaces are unavailable (P15).
+
 There is no relax flag. The local dev launcher (`node scripts/dev.mjs`, T004) binds only `127.0.0.1`. A container composition is deferred, and no production deployment command exists.
 
 ## Golden flow (local synthetic)
