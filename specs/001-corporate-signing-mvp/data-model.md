@@ -60,7 +60,7 @@ The exported-head ledger is one file beside the backups, on the local filesystem
    3. Under the lock, update the ledger. This is the commit point.
    4. Still under the lock, publish: rename staging to its final name, then fsync the parent directory. Release the lock, on success or failure.
 
-   Verify and restore refuse any staging directory or any backup without its final manifest. A staging directory is the **pending committed staging** when its heads equal the committed ledger heads for every tenant and no published backup carries those heads.
+   Verify and restore refuse any staging directory or any backup without its final manifest. A staging directory is the **pending committed staging** when its heads equal the committed ledger heads for every tenant and no published backup carries those heads. A backup may record the staging it is about to commit in an intent record (`<ledger>.publishing`) before the ledger rename. A staging named by a surviving intent record is also pending, even when a published backup already carries its heads (T30D-1, ratified in A-010): when the heads are unchanged, the ledger bytes cannot show whether the rename happened. Completing it publishes a second backup with the same heads. `--complete-staged` and abandoning clear the intent record.
 
    **Pre-commit refusal or failure.** This covers verification, lock contention, CAS mismatch, ancestry, the staging write, the ledger temp write or temp fsync, a failed ledger rename, and a crash at any of these points. The ledger is byte-identical, the previous published backup stays restorable, and the uncommitted staging may be discarded. If a crash loses a ledger rename whose directory fsync had not completed, the ledger shows the old heads again, and the same holds.
 
@@ -73,11 +73,19 @@ The exported-head ledger is one file beside the backups, on the local filesystem
    - The window affects restore availability only, never integrity. The ledger is never rolled back.
 
    **Recovery** (each under the lock):
-   - `--complete-staged <dir>`, where `dir` is the staging or the final name. It re-verifies the staged backup in full and requires its heads to equal the committed ledger heads for every tenant. It then fsyncs the ledger directory, renames the directory if it is still staged, and fsyncs the parent. It reports `published` only after the parent fsync succeeds. A head mismatch or a failed re-verification reports `refused` and leaves the ledger and the directory untouched. A repeated I/O failure reports `committed-pending-publication` again.
+   - `--complete-staged <dir>`, where `dir` is the staging or the final name. It re-verifies the staged backup in full and requires its heads to equal the committed ledger heads for every tenant. It then re-commits the ledger's current bytes by a fresh atomic replace, renames the directory if it is still staged, and fsyncs the parent. A bare re-fsync is never enough, because after an earlier fsync error a retry can return success without the entry being durable. It reports `published` only after the parent fsync succeeds. A head mismatch or a failed re-verification reports `refused` and leaves the ledger and the directory untouched. A repeated I/O failure reports `committed-pending-publication` again.
    - `--discard-staged <dir>` deletes only uncommitted staging: its heads differ from the committed ledger heads, or a published backup already carries those heads. It reports `discarded`.
-   - On the pending committed staging, `--discard-staged` refuses (`refused`) unless `--abandon-committed <ledger-digest>` is also given and matches the current ledger digest. Abandoning deletes the staging, leaves the ledger as committed, and reports `abandoned-committed`. Every restore then refuses until the next backup publishes, and that backup's heads must descend from the committed heads.
+   - `--discard-staged`, with or without `--abandon-committed`, acts only on a directory under its staging name, addressed by its exact current name. If that name does not exist, including when the backup already sits under its final name, it reports `refused`, says where the backup is, and deletes nothing. A backup under its final name is a published backup, and `--discard-staged` never deletes one (T30D-4, rejected in A-010).
+   - On the pending committed staging, `--discard-staged` refuses (`refused`) unless `--abandon-committed <ledger-digest>` is also given and matches the current ledger digest. Abandoning deletes the staging, leaves the ledger as committed, and reports `abandoned-committed`. Unless a published backup already carries the committed heads (the T30D-1 case), every restore then refuses until a backup carrying them is published. The next backup's heads must descend from the committed heads.
 
-   **`scripts/backup.mjs` statuses.**
+   **Post-commit failure in other ledger writers (A-010).** This covers `--first-restore`, `--retire-tenant`, `recordExportedHead` called outside a backup, and any future receipt writer, when the ledger rename has returned and the ledger-directory fsync then fails. A backup run in the same situation reports `committed-pending-publication`, because its staging still has to be published.
+   - The writer reports `committed-unsynced` (exit 74). The new ledger is visible, but it is not known to be durable. The message names the ledger, the previous and new digests and the recovery command. It never says the ledger is unchanged, byte-identical or durable.
+   - Nothing is rolled back. The restored database of a first restore stays in place, and the ledger is never rewritten to its previous bytes.
+   - The writer performs no effect that depends on the new head, such as releasing a receipt, until the ledger is durable.
+   - **Recovery:** `--resync-ledger <ledger-digest>`, under the lock. If the current ledger digest equals the given digest, it re-commits the same bytes by a fresh atomic replace (never a bare re-fsync) and reports `ledger-synced`. Otherwise the ledger has changed since: a later replace made its own bytes durable, or a crash lost the write. It reports `refused`, changes nothing and names the digest it found. The operator re-runs the original command if its effect is missing. Any later successful ledger replace also makes its own bytes durable.
+   - A crash that loses the rename leaves the previous ledger, which is the pre-commit outcome.
+
+   **Ledger statuses.** `scripts/backup.mjs` exits with these codes. Library callers such as `recordExportedHead` get the same status names as typed results.
 
    | Status | Exit | Meaning |
    |---|---|---|
@@ -86,11 +94,13 @@ The exported-head ledger is one file beside the backups, on the local filesystem
    | `abandoned-committed` | 0 | The pending committed staging was deleted on `--abandon-committed`; the ledger stays ahead |
    | `refused` | 1 | Any pre-commit refusal or failure, or a refused recovery; this run left the ledger byte-identical |
    | `committed-pending-publication` | 75 | A post-commit publication failure, or a pending committed staging; staging is preserved |
+   | `committed-unsynced` | 74 | A non-backup ledger write passed the rename, but its ledger-directory fsync failed; the new ledger is visible and not known to be durable |
+   | `ledger-synced` | 0 | `--resync-ledger` re-committed the current ledger bytes |
 
-   Exit 75 means only `committed-pending-publication`.
+   Exit 75 means only `committed-pending-publication`. Exit 74 means only `committed-unsynced`.
 4. **First runs.** A missing ledger refuses backup, verify and restore unless `--first-backup` or `--first-restore` is given. Damaged ledgers are refused even with those flags.
    - `--first-backup` creates the ledger, empty when no tenant has audit events yet.
-   - `--first-restore` writes the restored heads under the lock, all or nothing, so the next backup needs no flag.
+   - `--first-restore` writes the restored heads under the lock, all or nothing, so the next backup needs no flag. It restores the database first and writes the ledger as its last step (T30D-3, ratified in A-010). A failure before the commit point removes only the database files this run created, never touches a database that existed before the run, and leaves the ledger byte-identical (`refused`). After the commit point, the restored database is never removed.
    - Other restores never write the ledger.
 5. **Retired tenants.** A ledger tenant absent from the database refuses backup, because the tenant was deleted or the database replaced. `--retire-tenant <tenant_id>` (under the lock; the tenant must be absent) records a retirement entry with its last head. A retired tenant that reappears refuses backup.
 6. **Required blobs.** The blobs a backup requires are computed with the same reference-protection predicate that T029's disposer uses. That predicate is exported from `src/storage/retention/`; backup never keeps its own copy of the rule.

@@ -471,6 +471,15 @@ Each entry names a path and what an edit there moves. Every listed path is `[O]`
   - **Lane B.** LBR-1 requires a mount namespace, a minimal read-only root and dropped capabilities, so the parser gets no host IPC. The launcher is bubblewrap (preferred) or `unshare`+`chroot`+`setpriv`, all platform tools inventoried separately. Licenses come only from the package records, per the owner decision. Production fails closed when no launcher is usable. Bench availability is not production proof, and the production gate `parser-network-sandbox` stays OPEN. The local label becomes `netns+fs-enforced (local)`.
   - **T30R-1 lock.** Implemented inside Node (O_CREAT|O_EXCL in `src/storage/backup/`), so no platform tool such as `flock` is needed.
 
+- **A-010: post-commit status for every ledger writer, T030 round-2 deviations, and re-check rows.** Rows are in tasks.md § "Review findings ledger (A-008)" (close criterion 7), and rules in data-model.md § Backups and the exported-head ledger.
+  - **Commit point for every writer.** A non-backup ledger writer whose ledger-directory fsync fails after the rename reports `committed-unsynced` (exit 74), never `refused`. It recovers with `--resync-ledger <ledger-digest>`. Every recovery re-commits the ledger by a fresh atomic replace, never by a bare re-fsync.
+  - **T030 deviations.** These rulings stand unless the T030 re-check round 2 shows a hazard.
+    - T30D-1 (an intent record keeps a no-head-change staging pending) is ratified.
+    - T30D-3 (the first restore writes the ledger last) is ratified, on condition that a pre-commit failure removes only what that run created.
+    - T30D-4 (abandoning by the staging name deletes a backup under its final name) is rejected.
+  - **no-secrets.** The `scan-limit` rule from e1be709 is ratified as a fail-closed finding with no override.
+  - **Freeze baseline.** ce36f6e (N4) is integrated and is the freeze baseline.
+
 ## Delivery and Landing
 
 T001 establishes the pinned runtime, the type check and the frozen runner. T026 (no-secrets) and T002/T027 (inventory and qualification) must pass before any work that builds on dependencies. After T027 no package may be added. Phase 2 may run as two disjoint writer lanes in separate code worktrees (amendment A-005; tasks.md § Dependencies). Each lane has one writer and keeps every per-task check. Lane B commits are cherry-picked onto the feature branch in order, and all Phase 2 modes are re-run on the integrated head before US1 starts. US1 and later phases stay sequential. A container composition (`compose.yaml`) is deferred: the dev launcher is a Node script bound to loopback. US1 delivers human approval visibly short of sealed completion. US2 completes the signing MVP. US3 proves Hermes reuse and the healthcare contracts. Run synthesis/security/recovery acceptance before claiming the whole feature complete. Keep every implementation task unchecked until it is executed.
