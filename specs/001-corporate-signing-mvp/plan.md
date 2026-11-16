@@ -137,6 +137,7 @@ Only a recorded architect amendment can add a mode. It does so through a new `[O
 | N1 | Require `.npmrc`'s non-blank, non-comment lines to equal exactly the three frozen `key=true` lines, compared as a whole like `tsconfig.json`. A quoted key, a section header or an extra key such as `script-shell` gives ENV_MISMATCH. |
 | N2 | RT-17 asserts that a reason starts with `runtime `, so the runtime-version check is proven on its own. |
 | N3 (A-008) | The `.npmrc` check normalises CRLF and rejects any character outside tab, LF and printable ASCII. A CR-only line or U+2028/U+2029 can no longer hide `script-shell=` or `ignore-scripts=false` from the N1 comparison. Two cases are added inside RT-34. |
+| N4 (A-009) | RT-12's `processGone` re-probes with signal 0 on ENOENT (ce36f6e). Only the frozen self-test file changes; `EXPECTED_TESTS` stays 38. ce36f6e becomes the freeze baseline when the fix lane is integrated. |
 | Codex [1] (A-008) | RT-12 treats a test child in state `Z` (read from `/proc/<pid>/stat`) as terminated, or reaps it before its parent is terminated, so containers whose PID 1 does not reap orphans no longer fail RT-12. |
 
 **Re-freeze.**
@@ -446,7 +447,7 @@ Each entry names a path and what an edit there moves. Every listed path is `[O]`
     - Without the capability, production mode fails closed. Development mode runs unsandboxed and reports `network_sandbox: unavailable`.
     - PL-12 is relabelled "import boundary (defence in depth), not network isolation".
   - **New gate.** `parser-network-sandbox` (A-007) stays OPEN until deployment-environment evidence exists.
-  - **Evidence wording.** Evidence and receipts report the observed local capability (`netns-enforced (local)` or `unavailable`) and never imply that the production gate passed.
+  - **Evidence wording.** Evidence and receipts report the observed local capability (`netns+fs-enforced (local)` or `unavailable`) and never imply that the production gate passed.
   - **Caveat.** Some CI hosts refuse unprivileged user namespaces (for example Ubuntu 24.04's AppArmor restriction). There the service fails closed in production mode, and the gate stays OPEN.
 
 - **A-008: review-findings ledger and scope rulings.** The ledger and the Phase 2 close criteria are in tasks.md § "Review findings ledger (A-008)". The rulings:
@@ -458,6 +459,17 @@ Each entry names a path and what an edit there moves. Every listed path is `[O]`
   - **P11.** The tenants table is canonical. T005 enforces `allowed_roles` through an injected TenantPolicy, and T031 wires it after the lanes merge.
   - **S1.** The pre-seal approval manifest digest is a CMS signed attribute (OID 2.25.254263291653419018820250361524609646248). The work spans T038, T013, T037, T014, T016 and T012.
   - **S3.** Directory fsync after rename (data-model.md).
+
+- **A-009: T030 ledger, deviations, T006 parallelism and lane B re-check.** Rows are in tasks.md § "Review findings ledger (A-008)" and rules in data-model.md § Backups and the exported-head ledger.
+  - **Ledger.** One locked writer path (O_EXCL lock plus digest CAS; never auto-broken). An all-or-nothing atomic replace. Publish ordering stage → ledger → rename. Multi-host and shared storage are out of scope.
+  - **Deviations.**
+    - D1 (`--first-backup`) is ratified.
+    - D2 (the duplicated retention rule) is rejected: there is one shared T029 predicate, and T30R-4 was failing open.
+    - D3 is superseded: `--first-restore` writes the restored heads.
+    - The missing-tenant dead end is resolved by `--retire-tenant`.
+  - **T006** may run before Phase 2 closes in worktree `code-us1`, with final acceptance after close.
+  - **Lane B.** LBR-1 requires a mount namespace, a minimal read-only root and dropped capabilities, so the parser gets no host IPC. The launcher is bubblewrap (preferred) or `unshare`+`chroot`+`setpriv`, all platform tools inventoried separately. Licenses come only from the package records, per the owner decision. Production fails closed when no launcher is usable. Bench availability is not production proof, and the production gate `parser-network-sandbox` stays OPEN. The local label becomes `netns+fs-enforced (local)`.
+  - **T30R-1 lock.** Implemented inside Node (O_CREAT|O_EXCL in `src/storage/backup/`), so no platform tool such as `flock` is needed.
 
 ## Delivery and Landing
 

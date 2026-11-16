@@ -34,13 +34,39 @@ Revision 2026-11-08 (M4). The API shapes are in [http-api.yaml](contracts/http-a
 | FinalArtifact | envelope_id unique, artifact_id, artifact_digest (SHA-256 of final.pdf), package_digest (SHA-256 of the ZIP), approved_composition_digest, PDF/evidence/package blob refs, signer certificate SHA-256, development_certificate flag, verifier name/version/results, fencing_token of the publishing attempt, approval_evidence_digest; immutable. **Evidence binding (A-008, S1).** approval_evidence_digest = SHA-256 of the RFC 8785 form of approval-manifest.json without `final_pdf_digest`. The manifest is built before sealing, after the `envelope.seal_started` audit anchor is written. The digest is committed inside the seal as the CMS signed attribute `opensig-approval-evidence-digest` (OID 2.25.254263291653419018820250361524609646248) |
 | VerificationReport | artifact_digest, integrity, trust, trust_anchor_ref, revision_coverage, seal_type `organization`, timestamp_status (`absent` until implemented), revocation_status (`not-checked` until implemented), verifier, verified_at, checks; produced by `src/verifier/` only |
 | AuditEvent | tenant hash chain: seq (monotonic per tenant), type, actor {kind, ref}, server_time, subject_digest, redacted metadata, prev_digest, event_digest = SHA-256(JCS(event without event_digest)); append-only through one restricted writer; never contains capability values, codes, keys or PDF content Digest preimage (T029): `{schema: "opensig.audit-event/1", tenant_id, seq, type, actor {kind, ref}, server_time, envelope_id, subject_digest, metadata, prev_digest}`, with null for an absent envelope_id, subject_digest or prev_digest. The audit receipt carries exactly this preimage plus event_digest for each event (contract `AuditEventRecord`), so any holder can recompute the digest. metadata is already redacted at write time, so exposing it reveals nothing unredacted. |
-| AuditCheckpoint | tenant_id, seq, event_digest at seq, created_at. Written every 100 events and at every completion. The chain head at completion goes into the audit receipt and the acceptance receipt. Restore verifies chain continuity from the last checkpoint and that the head is not older than the last exported head. The chain is **tamper-evident, not tamper-proof** (no external immutable store in MVP) |
+| AuditCheckpoint | tenant_id, seq, event_digest at seq, created_at. Written every 100 events and at every completion. The chain head at completion goes into the audit receipt and the acceptance receipt. Restore verifies chain continuity from the last checkpoint and that the head is not older than the last exported head (ledger rules in § Backups and the exported-head ledger). The chain is **tamper-evident, not tamper-proof** (no external immutable store in MVP) |
 | OutboxEvent | unique event_id, tenant/envelope/version, type/schema, delivery attempts and acknowledgement; inserted in the same transaction as the state change it announces |
 | WebhookRegistration / WebhookKey | registration: tenant, HTTPS url, event types, status. Key: key_id, secret protected at rest (encrypted under a server key from a 0600 file), created_at, expires_at (overlap), revoked_at; at most 2 active keys |
 | ConsumerAttachment | consumer/source_id/source_version/artifact_id unique; a duplicate event is harmless; a stale source version is rejected; deduplication retained ≥ 72 hours (the maximum retry horizon) |
 | AnchorReceipt | `disabled` or `fake`, artifact_digest, adapter/schema; fake=true and never a real transaction ID or network proof |
 | FinalizationAttemptBlob | tenant_id, envelope_id, fencing_token (the attempt), blob_ref (tenant-namespaced), role `composed`/`sealed`/`evidence`, recorded_at. The record is written in its own transaction **before** the blob write, so no attempt blob is ever untracked. It is added by an appended migration in T038. A blob is collectable only when no final_artifacts row references it and its attempt is not the published one, and only after the attempt's lease has expired plus a 24-hour grace. Deduplicated content-addressed refs shared with the published artifact are never collected |
 | DisposalRecord | tenant, envelope, artifact digests retained, disposed blob refs, policy reference, server_time; written with an audit event when retention disposes blobs. Completed evidence is never mutated in place |
+
+## Backups and the exported-head ledger (A-009)
+
+The exported-head ledger is one file beside the backups, on the local filesystem of the single service host. It records, per tenant, the audit-chain head (`seq`, `event_digest`) of the latest published backup, plus any retired tenants. The **last exported head** of a tenant is the value written by the most recent committed ledger replace.
+
+1. **Single locked writer path.** Every ledger write, by backup, by first restore, or by any future receipt writer, goes through `src/storage/backup/ledger.ts`:
+   - Take an exclusive lock: `${ledger}.lock`, created with O_CREAT|O_EXCL, recording pid, hostname, start time and a random nonce.
+   - Re-read the ledger and its digest.
+   - Check ancestry for every tenant.
+   - Do **one** atomic replace: temp file, fsync, rename, directory fsync. Immediately before the replace, compare the digest with the one read under the lock (CAS); a mismatch refuses.
+
+   Lock contention refuses at once and never waits silently. A stale lock is never broken automatically. Only an explicit operator `--break-lock <nonce>` can break it, and only when the nonce matches, the recorded host is this host, and the recorded pid is not alive. No other module writes the ledger file. Multi-host and shared-storage (for example NFS) backup is out of MVP scope.
+2. **All or nothing.** A multi-tenant backup records every tenant's new head in that one replace, after every tenant has verified. On any refusal or failure, the ledger stays byte-identical, and the previous published backup stays restorable.
+3. **Publish ordering.**
+   1. Write the backup into a staging directory (`.staging-*`).
+   2. Verify it.
+   3. Under the lock, update the ledger.
+   4. Publish by renaming staging to its final name, then fsync the parent directory.
+
+   Verify and restore refuse any staging directory or any backup without its final manifest. A crash before the ledger replace leaves only an unusable staging directory. A crash after the replace but before publication leaves the ledger ahead of every published backup; that window affects availability only. The operator recovers with `--complete-staged <dir>`, which re-verifies that the staged heads equal the ledger heads and then publishes, or with `--discard-staged <dir>`.
+4. **First runs.** A missing ledger refuses backup, verify and restore unless `--first-backup` or `--first-restore` is given. Damaged ledgers are refused even with those flags.
+   - `--first-backup` creates the ledger, empty when no tenant has audit events yet.
+   - `--first-restore` writes the restored heads under the lock, all or nothing, so the next backup needs no flag.
+   - Other restores never write the ledger.
+5. **Retired tenants.** A ledger tenant absent from the database refuses backup, because the tenant was deleted or the database replaced. `--retire-tenant <tenant_id>` (under the lock; the tenant must be absent) records a retirement entry with its last head. A retired tenant that reappears refuses backup.
+6. **Required blobs.** The blobs a backup requires are computed with the same reference-protection predicate that T029's disposer uses. That predicate is exported from `src/storage/retention/`; backup never keeps its own copy of the rule.
 
 ## Envelope states and the "fully approved" mapping
 
