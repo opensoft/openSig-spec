@@ -119,10 +119,14 @@ The default execution is strictly sequential in the order listed, with one write
 
 1. Every ledger row marked close-blocking is fixed in its owner task's `files:`, with the named test present and passing in that task's mode.
 2. The material findings P02, P03, P08 and P09 are fixed **and** independently rechecked by a read-only reviewer.
-3. The reviewer's proof scripts (`p2review/proofs/proof-a.mjs`, `proof-c.mjs`, `proof-d.mjs`, `proof-e.mjs`) are rerun on the pinned Node 24.22.2 (`tools/node/bin/node`) against the integrated head. Each must now show the defect rejected, and the outputs go into the final receipts.
+3. The Phase 2 regression reviewer's proofs, proof-a, proof-c, proof-d and proof-e (P02, P03, P08, P09), are rerun on the pinned Node 24.22.2 (`tools/node/bin/node`) against the integrated head. Each must now show the defect rejected, and the outputs are recorded in the Phase 2 close receipts.
 4. Every Phase 2 mode passes on the integrated head, together with the Phase 1 modes and `no-secrets`.
 5. The A-007 runner round (including N4 at ce36f6e and Codex [1]) is accepted and re-frozen.
-6. The A-009 rows marked close-blocking are done. The T030 reviewer's probes (`/workspace/tmp/opensig-t030-review-20261116/probes/`, covering h1, h1c, h2 and the T30R-4 orphan scenario) and the lane B re-check probes (including the pathname-socket connect in `netns-probe`) are rerun on pinned Node 24.22.2 against the integrated head. Each must now show refusal or isolation.
+6. The A-009 rows marked close-blocking are done. Two sets of probes are rerun on pinned Node 24.22.2 against the integrated head, and each must now show refusal or isolation:
+   - the T030 reviewer's probes h1, h1c, h2 and the T30R-4 orphan scenario (T30R-1..T30R-4; OR-15..OR-24);
+   - the lane B re-check probes, including the pathname-socket connect (LBR-1, PL-18).
+
+   Their outputs are recorded in the Phase 2 close receipts.
 
 A mode PASS alone never waives a finding.
 
