@@ -36,6 +36,7 @@ npm run verify -- acceptance             # release gate only; FAILS while any ga
 **Configuration (service settings).**
 - `OPENSIG_DATA_DIR`: the service data directory.
 - `OPENSIG_DATABASE`: the SQLite database path, defaulting to `$OPENSIG_DATA_DIR/opensig.db` (T031, SEC-07). The server refuses to start when the deployment configuration and the tenants table disagree.
+- `OPENSIG_CHALLENGE_KEY_FILE`: path to the HMAC key for recipient challenge codes. Startup refuses unless it is a regular 0600 file holding at least 32 bytes (T031 US1 composition; T008).
 - `OPENSIG_PARSER_ALLOW_UNSANDBOXED=1`: development only; it permits the unsandboxed parser only when namespaces are unavailable (P15).
 
 There is no relax flag. The local dev launcher (`node scripts/dev.mjs`, T004) binds only `127.0.0.1`. A container composition is deferred, and no production deployment command exists.
