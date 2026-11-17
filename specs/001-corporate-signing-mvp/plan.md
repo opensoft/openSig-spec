@@ -281,7 +281,7 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 
 **SC-002 (all defined negative tests).**
 - SC002-01: second recipient before first → 409, no approval
-- SC002-02: recipient session of envelope A used on B → 404
+- SC002-02: recipient session of envelope A used on B → 409, identical to a binding mismatch on A itself, with no write in either tenant. The session-bound approval and decline routes carry no envelope id and declare no 404 (A-010, request #24)
 - SC002-03: stale `expected_version` → 409
 - SC002-04: `document_digest` mismatch → 409
 - SC002-05: `manifest_digest` mismatch → 409
