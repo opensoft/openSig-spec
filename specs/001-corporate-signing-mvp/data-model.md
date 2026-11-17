@@ -169,6 +169,11 @@ The exported-head ledger is one file beside the backups, on the local filesystem
   - **There is no operator browser session in the MVP**, so the operator side has no cookie and no CSRF surface.
   - Service principals (Hermes, healthcare adapters) can never approve, decline, confirm sends, register callbacks, void or retry.
 - **Recipients.**
+  - **Generic 202 (A-010).** `requestChallenge`'s generic 202 must be indistinguishable in timing as well as in status, body and headers.
+    - Before responding it does only work that is the same for every request: schema validation, and the rate-limit decision keyed by the presented token's hash.
+    - The lookup, supersession, challenge write and mail run after the 202, serialized per invitation in their own transaction.
+    - A failure after the response is logged with the correlation ID (never a token or code) and counted, never silently lost. The recipient can request again.
+    - Durable counters and rate limits are unchanged.
   - The invitation (URL fragment), the mailed challenge code and the HttpOnly/Secure/SameSite=Strict session follow the parameters in the entities above.
   - GET, HEAD and prefetch never approve or consume.
   - Approval requires a CSRF token, an allowlisted Origin, consent text version and digest, the expected document, manifest, prior approval and version, and the session's bound recipient.
