@@ -348,13 +348,13 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 - CMS-01 (A-008 S1; an extra case beyond the registry's KEY-01 and KEY-02): OpenSSL reads the approval-evidence attribute back as the 32 digest bytes.
 
 **CP** (`compose`, T036; A-010, request #43).
-- CP-01: the output is the base's bytes unchanged, followed by exactly one appended revision. Its cross-reference section is of the kind of the base's last section, a table after a hybrid base, and its `/Prev` is the base's `startxref`. Rewritten base objects keep their numbers, and a shared indirect `/Fields` or `/Annots` array is copied inline, never changed. The largest request the budgets allow stays under the update bound that the module header states.
+- CP-01: the output is the base's bytes unchanged, followed by exactly one appended revision. Its cross-reference section is of the kind of the base's last section, a table after a hybrid base, and its `/Prev` is the base's `startxref`. Rewritten base objects keep their numbers, and a shared indirect `/Fields` or `/Annots` array is copied inline, never changed. The largest request the budgets allow stays under the update bound that the module header states. That request is the composer's real maximum, and for every base it composes, the upload predicate's worst case is at least the composed size (request #44).
 - CP-02: one `/FT /Sig` field, named `opensig-seal-` and the first 16 hex digits of the document digest, carries one widget kid per manifest field in manifest order. Each widget has `/F 132`, its page in `/P`, and a place in that page's `/Annots`. The AcroForm, created when the base has none, lists the field and combines `/SigFlags 3` with the base's flags. Existing fields are left alone, and a dangling form reference is refused.
 - CP-03: placement is correct on pages rotated 0, 90, 180 and 270 degrees.
 - CP-04: drawn values are path operators only. Typed values and dates are non-embedded Helvetica with WinAnsiEncoding, sized at one em per character so they fit without glyph metrics. A date widget shows the date only, with the `/Contents` text "Date from unsigned server time (UTC)". A character outside WinAnsiEncoding gets 422 `unsupported_characters`, after every 400 rule.
 - CP-05: the `/Sig` dictionary has `/Filter /Adobe.PPKLite`, `/SubFilter /ETSI.CAdES.detached`, `/M` from `sealTime`, and `/Reason` with the unsigned-server-time label. `/ByteRange` is written and covers every byte except the `/Contents` hex string. That string is exactly 2 × `signedDataLength(certificate)` zero digits, and only those digits remain for the seal to write.
 - CP-06: equal requests give identical bytes, with no clock, randomness or locale, and values are placed in manifest order whatever the approvals' order. The trailer `/ID` keeps the base's first identifier and takes a SHA-256 prefix of the revision's content as its second.
-- CP-07, CP-08 and CP-09: as the T036 line states. CP-08 also shows that every refusal carries its contract code and status and a `retryable` flag, true only for 429 `rate_limited` and the parse service's 500s.
+- CP-07, CP-08 and CP-09: as the T036 line states. CP-08 also shows that every refusal carries its contract code and status and a `retryable` flag, true only for 429 `rate_limited` and the parse service's 500s. Numbers are checked only in the objects the composer rewrites, and `detail` is a fixed machine detail (request #44).
 
 **ZIP** (`zip`, T039; extra case IDs, A-010, request #43; the frozen registry requires none).
 - ZIP-01: the five package files round-trip byte-exact through the independent reader.
@@ -362,7 +362,25 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 - ZIP-03: every header has store method, 1980-01-01 00:00:00, only the UTF-8 name flag, version needed 2.0, version made by Unix 2.0, the external attributes of a 0644 regular file and internal attributes 0. There is no extra field, data descriptor, comment or ZIP64 record. Each CRC-32 equals an independent table-driven computation, and one known-answer archive matches byte for byte.
 - ZIP-04: entries are sorted by the bytes of their names.
 - ZIP-05: a name that is not flat ASCII (letters, digits, `.`, `_` and `-`, 1 to 255 characters, not starting with `.`), a duplicate when ASCII case is ignored, and an empty entry list are each refused.
-- ZIP-06: the defaults are the ZIP64 escape values minus one. A lowered limit refuses at the limit and accepts one below it, and a limit can never be raised past the defaults.
+- ZIP-06: the defaults are the ZIP64 escape values minus one. A limit is an inclusive maximum: a lowered limit accepts at the limit and refuses one above it, and a limit can never be raised past the defaults (request #44).
+
+**WK** (`cryptograph`, T037; A-010, request #44).
+- WK-01: the CMS fills the placeholder exactly, as lowercase hex, and changes no other byte. Its messageDigest covers both spans, its signature verifies, the reported digests match a recomputation, and equal inputs give identical bytes.
+- WK-02: the child's environment is empty and its launch plan is fixed: the permission model with read grants on its own modules only, no code generation from strings, no argument after the entry, fd 2 on `/dev/null`, and no PEM-shaped value from the parent's environment reaching it.
+- WK-03: a crash, a non-zero exit, the timeout, a broken reply, an abort, a bad or mismatched key and a non-regular descriptor each give their reason and retryable flag, with no artifact and no secret in any message.
+- WK-04: a CMS length that differs from the placeholder, in either direction, a placeholder that is not all zero digits at its offsets, a wrong written `/ByteRange`, malformed input and a document above `MAX_SEALED_PDF_BYTES` are each refused, non-retryably.
+- WK-05: the approval-evidence digest is read back from the signed attribute, byte for byte.
+
+**VB** (`verification`, T014; VB-01 is the registry's required case, and VB-02..VB-10 are extra case IDs; A-010, request #44).
+- VB-02: every report field stays within the contract limits, checked against the vendored schema; a report that cannot fit is refused, never truncated.
+- VB-03: the `approval-evidence-digest` check compares the signed attribute with the manifest digest the caller supplies.
+- VB-04: on every oracle corpus case, T014's result agrees with the oracle's on the fields of request #39 Part E, and the case count matches `case_count`.
+- VB-05: on fixed product-sealed outputs (T036 then T037), T014 agrees with the oracle, with a count check.
+- VB-06: the structure reader reads classic tables, cross-reference streams with the PNG predictors and hybrid files, checks every type-1 and type-2 entry, and requires each `/Prev` to point earlier. It accepts any file up to `MAX_SEALED_PDF_BYTES` whose base T033 accepted.
+- VB-07: the ByteRange and CMS profile checks: exactly one `/ByteRange`, a first range at 0, a gap that is exactly one even-length hex string, a second range ending at a revision end or at end of file under the OC-08 fallback, strict DER, one SignerInfo, sorted signed attributes, and the signature over the attributes as a SET.
+- VB-08: trust is judged against the configured anchors only; a malformed anchor configuration is refused (`anchors-invalid`), never trusted, and `trust_anchor_ref` is null unless trust is `trusted`.
+- VB-09: a signingTime, a missing signingCertificateV2 or a time-stamp token in a foreign CMS never changes integrity, trust or coverage: the first two are profile checks, and the last gives timestamp `indeterminate`. Product-sealed output shows none of them.
+- VB-10: `indeterminate` integrity never occurs on the corpus, and the inputs that give it (multiple signatures or signers, a digest other than SHA-256, a non-RSA key, an RSA key under 2048 bits, RSASSA-PSS) each give it.
 
 **SC-001.** SC001-01..SC001-10 are ten consecutive one- and two-recipient flows. In each, the approval's `document_digest` equals the SHA-256 of the PDF bytes the browser received.
 

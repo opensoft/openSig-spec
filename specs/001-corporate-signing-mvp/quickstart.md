@@ -30,13 +30,14 @@ npm run verify -- acceptance             # release gate only; FAILS while any ga
 **How to read exit codes.**
 - Only exit 0 with `PASS` counts.
 - `CAPABILITY_ABSENT` (3) means environment-blocked. It applies when OpenSSL, the Playwright Chromium revision or the isolated Hermes image is missing.
-- The parse sandbox launcher (bubblewrap, or util-linux `unshare` with `chroot` and `setpriv`) is a bench prerequisite, not a registry capability. On a host without one, a mode whose tests run the real parse service, `compose` among them, FAILs rather than reporting `CAPABILITY_ABSENT` (A-010, request #43).
+- The parse sandbox launcher (bubblewrap, or util-linux `unshare` with `chroot` and `setpriv`) is a bench prerequisite, not a registry capability. On a host without one, a mode whose tests run the real parse service, `compose` and `verification` among them, FAILs rather than reporting `CAPABILITY_ABSENT` (A-010, request #43).
 - `VACUOUS` (4) means no real tests ran: missing tests, skips, todo or a missing case ID.
 - Any other non-zero status is a failure.
 
 **Configuration (service settings).**
 - `OPENSIG_DATA_DIR`: the service data directory. The blob store is `$OPENSIG_DATA_DIR/blobs`, created 0700 if absent, with no separate setting (T031 US1 composition).
 - `OPENSIG_DATABASE`: the SQLite database path, defaulting to `$OPENSIG_DATA_DIR/opensig.db` (T031, SEC-07). Since the US1 composition the database is required with or without operator authentication, and it must already exist and be migrated: the server never creates or migrates it. The server refuses to start when the deployment configuration and the tenants table disagree.
+- `OPENSIG_TRUST_ANCHORS_FILE`: a regular file of PEM trust-anchor certificates for the product verifier, planned with US2 and read by the finalization runner (T038). Without it there are no anchors, and trust is never `trusted`. Production anchors are the open `trusted-certificate-key-custody` gate (A-010, request #44).
 - `OPENSIG_SEAL_KEY_FILE` and `OPENSIG_SEAL_CERT_FILE`: the seal's owner-only private-key file and its signer certificate, planned with US2 and read by the finalization runner (T038). Development keys only; production key custody is the open `trusted-certificate-key-custody` gate (A-010, request #39).
 - `OPENSIG_CHALLENGE_KEY_FILE`: path to the HMAC key for recipient challenge codes. Startup refuses unless it is a regular file, not a symbolic link, owned by the server user, with no group or other permission bit (for example 0600 or 0400), holding 32 to 4096 bytes (T031 US1 composition; T008).
 - `OPENSIG_PARSER_ALLOW_UNSANDBOXED=1`: development only; it permits the unsandboxed parser only when namespaces are unavailable (P15).
