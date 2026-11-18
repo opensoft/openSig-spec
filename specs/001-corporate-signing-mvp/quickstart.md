@@ -34,12 +34,12 @@ npm run verify -- acceptance             # release gate only; FAILS while any ga
 - Any other non-zero status is a failure.
 
 **Configuration (service settings).**
-- `OPENSIG_DATA_DIR`: the service data directory.
-- `OPENSIG_DATABASE`: the SQLite database path, defaulting to `$OPENSIG_DATA_DIR/opensig.db` (T031, SEC-07). The server refuses to start when the deployment configuration and the tenants table disagree.
-- `OPENSIG_CHALLENGE_KEY_FILE`: path to the HMAC key for recipient challenge codes. Startup refuses unless it is a regular 0600 file holding at least 32 bytes (T031 US1 composition; T008).
+- `OPENSIG_DATA_DIR`: the service data directory. The blob store is `$OPENSIG_DATA_DIR/blobs`, created 0700 if absent, with no separate setting (T031 US1 composition).
+- `OPENSIG_DATABASE`: the SQLite database path, defaulting to `$OPENSIG_DATA_DIR/opensig.db` (T031, SEC-07). Since the US1 composition the database is required with or without operator authentication, and it must already exist and be migrated: the server never creates or migrates it. The server refuses to start when the deployment configuration and the tenants table disagree.
+- `OPENSIG_CHALLENGE_KEY_FILE`: path to the HMAC key for recipient challenge codes. Startup refuses unless it is a regular file, not a symbolic link, owned by the server user, with no group or other permission bit (for example 0600 or 0400), holding 32 to 4096 bytes (T031 US1 composition; T008).
 - `OPENSIG_PARSER_ALLOW_UNSANDBOXED=1`: development only; it permits the unsandboxed parser only when namespaces are unavailable (P15).
 
-There is no relax flag. The local dev launcher (`node scripts/dev.mjs`, T004) binds only `127.0.0.1`. A container composition is deferred, and no production deployment command exists.
+There is no relax flag. The local dev launcher (`node scripts/dev.mjs`, T004) binds only `127.0.0.1`. From its post-composition follow-up (row DEV-COMPOSE), it generates a per-run challenge key outside the tree, and creates and migrates the development database, before it starts the server. A container composition is deferred, and no production deployment command exists.
 
 ## Golden flow (local synthetic)
 
