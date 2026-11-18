@@ -321,14 +321,15 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 
 **OC** (`integrity-contract`, T012; A-010, request #39). The oracle signs with the OpenSSL CLI and checks with its own structure checker; it imports nothing from `src/`.
 - OC-01: a clean seal is integrity `valid`, trust `trusted` (against its anchor), coverage `complete`, and accepted as the original. The CMS extracted from `/Contents` is byte-identical to the one signed, and it does not verify over the whole file. Variants include a self-signed signer (untrusted, still accepted), and seals on a cross-reference-stream base and on a hybrid base (a table whose trailer carries `/XRefStm`).
-- OC-02: a byte change in either signed range makes integrity `invalid`, with trust `indeterminate`.
+- OC-02: a byte change in either signed range makes integrity `invalid`, with trust `indeterminate`. The changes include a flip at each of the four range edges: offsets 0, l1−1, o2 and o2+l2−1 (request #41).
 - OC-03: an appended revision (page content, or Info only) leaves coverage `incomplete`, and the artifact is not accepted.
 - OC-04: a `/Contents` padding change keeps the signature `valid` but fails the exact-artifact digest; a changed CMS byte makes integrity `invalid`.
-- OC-05: a self-signed signer is `untrusted`, a CA-issued signer with its CA as anchor is `trusted`, and an unrelated anchor gives `untrusted`.
+- OC-05: a self-signed signer is `untrusted`, a CA-issued signer with its CA as anchor is `trusted`, and an unrelated anchor gives `untrusted`. Anchors are a list: an omitted value means none, and a value that is not a list is refused, never trusted (request #41).
 - OC-06: wrong ByteRanges (a gap that is not `/Contents`, a first range not at 0, a range not ending at a revision boundary) are rejected, although OpenSSL verifies the stated ranges.
 - OC-07: a truncated file (at the tail, or inside `/Contents`) is `invalid`.
-- OC-08: a bad `startxref`, `/Prev`, classic xref entry, cross-reference-stream entry or `/XRefStm` offset fails the structure check, so coverage is `indeterminate`.
-- OC-09 (A-008 S1; an extra case beyond the registry's OC-01..OC-08): the approval-evidence attribute matches, mismatches, is absent, or is malformed.
+- OC-08: a bad `startxref`, `/Prev`, classic xref entry, cross-reference-stream entry or `/XRefStm` offset fails the structure check, so coverage is `indeterminate`. The ByteRange check's revision boundary then falls back to the end of the file: a second range ending exactly at the file's length passes, and any other end fails. Integrity and trust are judged as usual (request #41).
+- OC-09 (A-008 S1; an extra case beyond the registry's OC-01..OC-08): the approval-evidence attribute matches, mismatches, is absent, or is malformed. Each corpus entry carries its expected digest as `expectedApprovalEvidenceDigest` (request #41).
+- OC-LIFECYCLE (an extra case, recorded by request #41): the runtime material lives in an owner-only `mkdtemp` directory (0700) with private key files at 0600 and is removed after use, and the whole corpus is built before any case runs, so a failed build stops the run. It is the parent of every corpus case.
 
 **CMS** (`cms`, T013; A-010, request #39).
 - KEY-01: the development seal key loads only from an owner-only regular file, either given by absolute path (opened without following a final symbolic link and without blocking) or through an inherited descriptor open on such a file. An unencrypted RSA-3072 key with public exponent 65537 yields an RSASSA-PKCS1-v1_5 SHA-256 signer. Loose modes, symbolic links, relative paths, non-regular files (a FIFO, a pipe), missing, empty or oversized files (over 16 KiB), other key types or sizes, encrypted keys and other exponents are refused.
