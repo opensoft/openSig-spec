@@ -354,7 +354,7 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 - CP-04: drawn values are path operators only. Typed values and dates are non-embedded Helvetica with WinAnsiEncoding, sized at one em per character so they fit without glyph metrics. A date widget shows the date only, with the `/Contents` text "Date from unsigned server time (UTC)". A character outside WinAnsiEncoding gets 422 `unsupported_characters`, after every 400 rule.
 - CP-05: the `/Sig` dictionary has `/Filter /Adobe.PPKLite`, `/SubFilter /ETSI.CAdES.detached`, `/M` from `sealTime`, and `/Reason` with the unsigned-server-time label. `/ByteRange` is written and covers every byte except the `/Contents` hex string. That string is exactly 2 × `signedDataLength(certificate)` zero digits, and only those digits remain for the seal to write.
 - CP-06: equal requests give identical bytes, with no clock, randomness or locale, and values are placed in manifest order whatever the approvals' order. The trailer `/ID` keeps the base's first identifier and takes a SHA-256 prefix of the revision's content as its second.
-- CP-07, CP-08 and CP-09: as the T036 line states. CP-08 also shows that every refusal carries its contract code and status and a `retryable` flag, true only for 429 `rate_limited` and the parse service's 500s. Numbers are checked only in the objects the composer rewrites, and `detail` is a fixed machine detail (request #44).
+- CP-07, CP-08 and CP-09: as the T036 line states. CP-08 also shows that every refusal carries its contract code and status and a `retryable` flag, true only for 429 `rate_limited` and the parse service's 500s. Numbers are checked only in the objects the composer rewrites, and `detail` is a fixed machine detail (request #44). The predicate's refusals also include `xref_size`, `page_box` and `name_character`, and a key named `__proto__` is examined like any other (request #46).
 
 **ZIP** (`zip`, T039; extra case IDs, A-010, request #43; the frozen registry requires none).
 - ZIP-01: the five package files round-trip byte-exact through the independent reader.
@@ -381,6 +381,12 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 - VB-08: trust is judged against the configured anchors only; a malformed anchor configuration is refused (`anchors-invalid`), never trusted, and `trust_anchor_ref` is null unless trust is `trusted`.
 - VB-09: a signingTime, a missing signingCertificateV2 or a time-stamp token in a foreign CMS never changes integrity, trust or coverage: the first two are profile checks, and the last gives timestamp `indeterminate`. Product-sealed output shows none of them.
 - VB-10: `indeterminate` integrity never occurs on the corpus, and the inputs that give it (multiple signatures or signers, a digest other than SHA-256, a non-RSA key, an RSA key under 2048 bits, RSASSA-PSS) each give it.
+
+**PK** (`artifacts`, T016; PK-01..PK-04 are the registry's required cases; A-010, request #46).
+- PK-01: the package holds exactly final.pdf, approval-manifest.json, audit-receipt.json, verification.json and package-index.json, each valid against its vendored schema. The ZIP stays within T028's 64 MiB per blob: final.pdf is at most `MAX_SEALED_PDF_BYTES`, and the other members and the ZIP framing are within their stated budgets. The receipt budget covers `ENVELOPE_REPEATABLE_EVENT_CAP` plus the event sources that have no cap and are bounded per envelope.
+- PK-02: the digests cross-link: package-index.json's digests and sizes equal the members, and the manifest, verification report and artifact digests agree. Each broken link the builder can see is refused.
+- PK-03: no member contains a capability value, token, code, cookie or key.
+- PK-04: retrieval serves exactly the stored bytes, with ETags equal to their digests. It answers 409 `not_completed` in every state before completion and while finalizing with an artifact row, and 401 without authentication. A broken invariant, such as a completed artifact with no package, answers 500 `internal`.
 
 **SC-001.** SC001-01..SC001-10 are ten consecutive one- and two-recipient flows. In each, the approval's `document_digest` equals the SHA-256 of the PDF bytes the browser received.
 
