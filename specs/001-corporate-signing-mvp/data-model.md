@@ -180,6 +180,6 @@ The exported-head ledger is one file beside the backups, on the local filesystem
   - Resend, reissue, void, decline and expiry revoke outstanding invitations, challenges and sessions.
   - Mailbox challenge alone never creates representative authority.
 - **Keys and secrets.**
-  - The development signing key, the challenge-HMAC key and the webhook-key encryption key are generated at test runtime in a `mkdtemp` directory with mode 0600, outside the tree. They are passed by file path or inherited file descriptor, never through environment variables or argv.
+  - The development signing key, the challenge-HMAC key and the webhook-key encryption key are generated at test runtime as private key files of mode 0600, inside an owner-only `mkdtemp` directory (mode 0700) outside the tree. They are runtime-only and removed after use (A-010, request #39). They are passed by file path or inherited file descriptor, never through environment variables or argv.
   - Child-process environments are cleared of secrets.
   - Production managed key custody is a release prerequisite.

@@ -319,6 +319,33 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 - US1-01: the two-recipient flow reaches "fully approved" (`approvals_complete=true`, state `finalizing`). Recipient 2 cannot approve before recipient 1. Until recipient 1's approval commits, no invitation, challenge or session of recipient 2 exists in the store or the spool, and the invitation appears after it. An approveAsHuman attempt from recipient 2's browser context before then gets 401, with no approval and no version change. At recipient 2's turn, the sender's bearer token beside recipient 2's cookie and CSRF token gets 401, with no change. The shell shows "fully approved" and makes no claim that the envelope is completed or sealed; an explanatory negation ("not completed yet") is allowed, and the test pins the receipt's exact wording (request #37). readEnvelope shows `finalizing`, not `completed`.
 - US1-02: the one-recipient flow reaches "fully approved" (`sent → finalizing`). The sender's and a service account's bearer tokens, each alone and each beside the recipient's own cookie and CSRF token, get 401 `unauthenticated` from approveAsHuman, with no approval and no version change. Each request carries the shell's allowlisted Origin, so the 401 comes from authentication, not from the Origin check, and the request log attributes it to approveAsHuman (request #37). "Fully approved" is shown, with no claim that the envelope is completed or sealed, as in US1-01.
 
+**OC** (`integrity-contract`, T012; A-010, request #39). The oracle signs with the OpenSSL CLI and checks with its own structure checker; it imports nothing from `src/`.
+- OC-01: a clean seal is integrity `valid`, trust `trusted` (against its anchor), coverage `complete`, and accepted as the original. The CMS extracted from `/Contents` is byte-identical to the one signed, and it does not verify over the whole file. Variants include a self-signed signer (untrusted, still accepted), and seals on a cross-reference-stream base and on a hybrid base (a table whose trailer carries `/XRefStm`).
+- OC-02: a byte change in either signed range makes integrity `invalid`, with trust `indeterminate`.
+- OC-03: an appended revision (page content, or Info only) leaves coverage `incomplete`, and the artifact is not accepted.
+- OC-04: a `/Contents` padding change keeps the signature `valid` but fails the exact-artifact digest; a changed CMS byte makes integrity `invalid`.
+- OC-05: a self-signed signer is `untrusted`, a CA-issued signer with its CA as anchor is `trusted`, and an unrelated anchor gives `untrusted`.
+- OC-06: wrong ByteRanges (a gap that is not `/Contents`, a first range not at 0, a range not ending at a revision boundary) are rejected, although OpenSSL verifies the stated ranges.
+- OC-07: a truncated file (at the tail, or inside `/Contents`) is `invalid`.
+- OC-08: a bad `startxref`, `/Prev`, classic xref entry, cross-reference-stream entry or `/XRefStm` offset fails the structure check, so coverage is `indeterminate`.
+- OC-09 (A-008 S1; an extra case beyond the registry's OC-01..OC-08): the approval-evidence attribute matches, mismatches, is absent, or is malformed.
+
+**CMS** (`cms`, T013; A-010, request #39).
+- KEY-01: the development seal key loads only from an owner-only regular file, either given by absolute path (opened without following a final symbolic link and without blocking) or through an inherited descriptor open on such a file. An unencrypted RSA-3072 key with public exponent 65537 yields an RSASSA-PKCS1-v1_5 SHA-256 signer. Loose modes, symbolic links, relative paths, non-regular files (a FIFO, a pipe), missing, empty or oversized files (over 16 KiB), other key types or sizes, encrypted keys and other exponents are refused.
+- KEY-02: key material is never taken from the environment, argv, a string, a buffer or a key object, and loading refuses while PEM private-key text is visible in the environment or argv. A refusal names a code, never a path or key bytes.
+- DER-01: lengths are definite and minimal.
+- DER-02: an INTEGER is minimal two's complement.
+- DER-03: OBJECT IDENTIFIER arcs are base 128, including the 2.25 arc of the approval-evidence attribute.
+- DER-04: SET OF sorts element encodings ascending, whatever the input order.
+- DER-05: the reader accepts only minimal definite DER inside its parent.
+- CMS-S01: `openssl cms -verify` passes with the certificate as anchor (also under `-cades`) and with `-noverify`, gives untrusted without the anchor, and fails after a content change.
+- CMS-S02: SignedData and SignerInfo carry exactly the profile fields. Both are version 1, with SHA-256, detached id-data, only the signer certificate, an issuerAndSerialNumber sid, and sha256WithRSAEncryption with NULL parameters.
+- CMS-S03: the signed attributes are exactly contentType, messageDigest, signingCertificateV2 (certHash only) and the approval-evidence digest, in DER order, with no signingTime.
+- CMS-S04: the signature is over the signed attributes encoded as a SET (0x31).
+- CMS-S05: equal inputs give equal bytes, and `signedDataLength` gives the exact output length.
+- CMS-S06: wrong digest sizes, a key that does not match the certificate, a certificate that is not RSA-3072 with exponent 65537 or exceeds 16 KiB, and a bad signer are refused.
+- CMS-01 (A-008 S1; an extra case beyond the registry's KEY-01 and KEY-02): OpenSSL reads the approval-evidence attribute back as the 32 digest bytes.
+
 **SC-001.** SC001-01..SC001-10 are ten consecutive one- and two-recipient flows. In each, the approval's `document_digest` equals the SHA-256 of the PDF bytes the browser received.
 
 **SC-005.**
