@@ -179,7 +179,7 @@ The exported-head ledger is one file beside the backups, on the local filesystem
   - GET, HEAD and prefetch never approve or consume.
   - Approval requires a CSRF token, an allowlisted Origin, consent text version and digest, the expected document, manifest, prior approval and version, and the session's bound recipient.
   - Resend, reissue, void, decline and expiry revoke outstanding invitations, challenges and sessions.
-  - **One session per recipient (A-010, request #50).** A new recipient session revokes the recipient's other sessions on the envelope in the same transaction, so signing in on a second device ends the first.
+  - **One session per recipient (A-010, request #50; confirmed by the driver, request #52).** A new recipient session revokes the recipient's other sessions on the envelope in the same transaction, so signing in on a second device ends the first.
   - Mailbox challenge alone never creates representative authority.
 - **Keys and secrets.**
   - The development signing key, the challenge-HMAC key and the webhook-key encryption key are generated at test runtime as private key files of mode 0600, inside an owner-only `mkdtemp` directory (mode 0700) outside the tree. They are runtime-only and removed after use (A-010, request #39). A test key that is never written may instead live only in memory, never exported or printed (A-010, request #43). They are passed by file path or inherited file descriptor, never through environment variables or argv.
