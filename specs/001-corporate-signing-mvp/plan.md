@@ -347,6 +347,23 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 - CMS-S06: wrong digest sizes, a key that does not match the certificate, a certificate that is not RSA-3072 with exponent 65537 or exceeds 16 KiB, and a bad signer are refused.
 - CMS-01 (A-008 S1; an extra case beyond the registry's KEY-01 and KEY-02): OpenSSL reads the approval-evidence attribute back as the 32 digest bytes.
 
+**CP** (`compose`, T036; A-010, request #43).
+- CP-01: the output is the base's bytes unchanged, followed by exactly one appended revision. Its cross-reference section is of the kind of the base's last section, a table after a hybrid base, and its `/Prev` is the base's `startxref`. Rewritten base objects keep their numbers, and a shared indirect `/Fields` or `/Annots` array is copied inline, never changed. The largest request the budgets allow stays under the update bound that the module header states.
+- CP-02: one `/FT /Sig` field, named `opensig-seal-` and the first 16 hex digits of the document digest, carries one widget kid per manifest field in manifest order. Each widget has `/F 132`, its page in `/P`, and a place in that page's `/Annots`. The AcroForm, created when the base has none, lists the field and combines `/SigFlags 3` with the base's flags. Existing fields are left alone, and a dangling form reference is refused.
+- CP-03: placement is correct on pages rotated 0, 90, 180 and 270 degrees.
+- CP-04: drawn values are path operators only. Typed values and dates are non-embedded Helvetica with WinAnsiEncoding, sized at one em per character so they fit without glyph metrics. A date widget shows the date only, with the `/Contents` text "Date from unsigned server time (UTC)". A character outside WinAnsiEncoding gets 422 `unsupported_characters`, after every 400 rule.
+- CP-05: the `/Sig` dictionary has `/Filter /Adobe.PPKLite`, `/SubFilter /ETSI.CAdES.detached`, `/M` from `sealTime`, and `/Reason` with the unsigned-server-time label. `/ByteRange` is written and covers every byte except the `/Contents` hex string. That string is exactly 2 × `signedDataLength(certificate)` zero digits, and only those digits remain for the seal to write.
+- CP-06: equal requests give identical bytes, with no clock, randomness or locale, and values are placed in manifest order whatever the approvals' order. The trailer `/ID` keeps the base's first identifier and takes a SHA-256 prefix of the revision's content as its second.
+- CP-07, CP-08 and CP-09: as the T036 line states. CP-08 also shows that every refusal carries its contract code and status and a `retryable` flag, true only for 429 `rate_limited` and the parse service's 500s.
+
+**ZIP** (`zip`, T039; extra case IDs, A-010, request #43; the frozen registry requires none).
+- ZIP-01: the five package files round-trip byte-exact through the independent reader.
+- ZIP-02: equal entries in any order, repeated builds and copied buffers give identical bytes, and no clock is read.
+- ZIP-03: every header has store method, 1980-01-01 00:00:00, only the UTF-8 name flag, version needed 2.0, version made by Unix 2.0, the external attributes of a 0644 regular file and internal attributes 0. There is no extra field, data descriptor, comment or ZIP64 record. Each CRC-32 equals an independent table-driven computation, and one known-answer archive matches byte for byte.
+- ZIP-04: entries are sorted by the bytes of their names.
+- ZIP-05: a name that is not flat ASCII (letters, digits, `.`, `_` and `-`, 1 to 255 characters, not starting with `.`), a duplicate when ASCII case is ignored, and an empty entry list are each refused.
+- ZIP-06: the defaults are the ZIP64 escape values minus one. A lowered limit refuses at the limit and accepts one below it, and a limit can never be raised past the defaults.
+
 **SC-001.** SC001-01..SC001-10 are ten consecutive one- and two-recipient flows. In each, the approval's `document_digest` equals the SHA-256 of the PDF bytes the browser received.
 
 **SC-005.**

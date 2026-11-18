@@ -30,6 +30,7 @@ npm run verify -- acceptance             # release gate only; FAILS while any ga
 **How to read exit codes.**
 - Only exit 0 with `PASS` counts.
 - `CAPABILITY_ABSENT` (3) means environment-blocked. It applies when OpenSSL, the Playwright Chromium revision or the isolated Hermes image is missing.
+- The parse sandbox launcher (bubblewrap, or util-linux `unshare` with `chroot` and `setpriv`) is a bench prerequisite, not a registry capability. On a host without one, a mode whose tests run the real parse service, `compose` among them, FAILs rather than reporting `CAPABILITY_ABSENT` (A-010, request #43).
 - `VACUOUS` (4) means no real tests ran: missing tests, skips, todo or a missing case ID.
 - Any other non-zero status is a failure.
 
