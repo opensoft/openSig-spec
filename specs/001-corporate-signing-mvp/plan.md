@@ -308,6 +308,27 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 - SC002-26: the cross-tenant 404 matrix, generated from contract paths, has a case for every operator route
 
 **SC-003.** SC003-01..SC003-20 are finalization fault and race cases. Each injects a SIGKILL or a barrier at a named phase in a separate OS process (reserve → compose → seal → verify → store PDF → store evidence → publish → outbox), plus void, decline, expiry, operator-retry-while-running and stale-lease races. After every case the invariants hold: one artifact, one event, never both completed and voided, bounded attempts.
+- **The catalog (A-010, request #61, adopting the T015 preparation's proposal P1).** The phases, in order, are reserve, compose, seal, verify, store PDF, store evidence, publish and outbox.
+  - **Each phase's hook sits immediately before the first durable write the phase makes in that attempt.** A phase with no durable write of its own (seal, verify) has its hook at its start. There are three exceptions:
+    - reserve's hook sits right after the lease grant commits, so an attempt is taken and nothing else is done;
+    - publish's hook sits inside the publish transaction, after its last statement and before COMMIT;
+    - outbox's hook sits right after the publish transaction commits.
+  - "Outbox" means the outbox insert, which is inside the publish transaction. Delivery is T019's, in US3.
+  - The compose phase's first durable write is the `envelope.seal_started` anchor, when the attempt writes it (request #59 (5)).
+  - The completion checkpoint, the receipt and the package belong to the tail of store evidence.
+- SC003-01..SC003-08: a SIGKILL at each phase in that order. A fresh runner then reclaims at the strict lease expiry and completes, so the envelope is completed exactly once.
+  - In SC003-01..SC003-07 the fresh runner takes one more attempt. In SC003-07 the uncommitted publish rolls back, and the retry reuses the anchor and the checkpoint.
+  - In SC003-08 the fresh runner finds the job succeeded and takes no attempt.
+- SC003-09..SC003-16: a barrier at each phase in that order. These are the stale-lease races.
+  - The barrier holds the runner while its lease expires. A probe 1 ms before the expiry reclaims nothing, and a second runner reclaims at the expiry and completes.
+  - In SC003-09..SC003-14 the released holder writes nothing, because every write it attempts is fenced.
+  - In SC003-15 the holder keeps the publish write lock. Its fence held under that lock, so its commit stands, and the second runner queues, then finds the job succeeded and writes nothing.
+  - In SC003-16 the second runner finds the job succeeded and takes no attempt.
+- SC003-17..SC003-20: each runs against a running finalization. A void at compose, a decline at seal, an expiry at store PDF, and an operator retry at store evidence are each refused with nothing written: the void and decline with 409, the expiry sweep by leaving the envelope, and the retry with 409 `finalization_not_retryable`. The finalization completes once.
+- Extra case IDs, never required:
+  - REC-01: without the harness flag, a run with every phase's hook point compiled in behaves exactly as an unhooked run, and a static check shows that the hook reads only that flag.
+  - REC-02: the attempt limit. A crash at the last allowed attempt is reclaimed into `failed` once, with one `envelope.finalization_failed` outbox event and one audit event. An operator retry then raises `max_attempts` by exactly one, and `attempt_count` never passes `max_attempts`, which never passes 100.
+- After every case the invariants hold (the T015 preparation's I1–I10): at most one artifact; one completion event if and only if completed; never completed beside voided, declined or expired; bounded attempts; one `envelope.finalization_failed` per move into `failed`; no referenced blob missing and no stored blob untracked; one seal anchor and one checkpoint; one verification row per publish; at most three audit events per attempt plus two; and the chain verifies.
 
 **SC-004.**
 - SC004-01: keyboard-only completion with zero pointer events
