@@ -388,6 +388,30 @@ Before a mode's own task lands, its file globs match nothing, so the mode return
 - PK-03: no member contains a capability value, token, code, cookie or key.
 - PK-04: retrieval serves exactly the stored bytes, with ETags equal to their digests. It answers 409 `not_completed` in every state before completion and while finalizing with an artifact row, and 401 without authentication. A broken invariant, such as a completed artifact with no package, answers 500 `internal`.
 
+**FEN** (`completion`, T038; FEN-01..FEN-03 are the registry's required cases, and FEN-04..FEN-09 are extra case IDs; A-010, request #59, adopting the T038 preparation's map).
+- FEN-01: publication fencing. A stale token, a stale envelope version, a wrong envelope state, a lost lease and the lease keeper's abort each refuse the publish, and nothing is written.
+- FEN-02: atomic publication. The job, the envelope, the FinalArtifact, the `verification_reports` row, `envelope.completed` and the outbox event commit together. A fault at the last statement rolls every one back, and three racing processes publish exactly once.
+- FEN-03: retry rules.
+  - A retry is allowed only from `retryable` or `failed`; otherwise it answers 409 `finalization_not_retryable`.
+  - From `failed` at the limit, `max_attempts` rises by exactly one, and `attempt_count` is never written. Past 100 the retry answers 409 `finalization_not_retryable` with detail `attempt_ceiling`.
+  - Each failure is classified by its component's `retryable` flag, and a T014 refusal is not retryable. `last_error_code` holds a code and reason, never a document value.
+  - The move into `failed` emits `envelope.finalization_failed` and its audit event once, and an operator retry is audited.
+- FEN-04: orphan collection.
+  - An abandoned attempt's blobs are collected after its lease expiry plus the 24-hour grace (with an injected clock), in one disposal with a DisposalRecord and an audit event.
+  - Published and shared refs are kept.
+  - A live attempt's refs are kept, with T029's RET-09.
+- FEN-05: P04 and lease expiry. Publication needs a running job and a finalizing envelope. An expired, reclaimed lease lets the old holder write nothing, and the expiry is strict.
+- FEN-06: the contract limits are validated on write.
+- FEN-07: evidence binding.
+  - The `envelope.seal_started` anchor is written once and reused by every retry, with its time as `sealTime`.
+  - approval-manifest.json is built before sealing, and `approval_evidence_digest` is computed over it without `final_pdf_digest`.
+  - The digest is passed to the seal unchanged, stored in the FinalArtifact, and equal to the signed attribute that T014 reports as `match`.
+- FEN-08: the package.
+  - The completion checkpoint is written once and reused by a retry, and the receipt runs to the head it records.
+  - The ZIP blob is recorded, then stored, and `package_digest` and its ref are inserted in the publish transaction.
+  - `envelope.completed` follows the receipt's head, and a stale-fencing publish leaves the package blob collectable.
+- FEN-09: no-replace guards. An insert that repeats a key of `final_artifacts`, `verification_reports`, `outbox_events` or the FinalizationAttemptBlob table is refused, by REPLACE or any other conflict clause, and leaves the existing row.
+
 **SC-001.** SC001-01..SC001-10 are ten consecutive one- and two-recipient flows. In each, the approval's `document_digest` equals the SHA-256 of the PDF bytes the browser received.
 
 **SC-005.**
