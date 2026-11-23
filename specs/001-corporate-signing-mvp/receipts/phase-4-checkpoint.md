@@ -67,6 +67,8 @@ The failed mode retained before digest `763fb6eb79f3c0df706537e0c2417d58ee0c2ec2
 
 The same batch reported a PL-26 failure in `parser-limits`. The captured bwrap init did not become reaped within the test’s 20,000 ms bound, leaving the elapsed time as `NaN`. The wrapper ran as a child subreaper and waited to reap adopted children until the mode exited. That ordering can keep an orphan visible to PL-26 during the assertion, and the specific PID’s reaping path remains unconfirmed. The raw `parser-limits-result.json` and its null after digest are preserved in the batch manifest.
 
+The later normal-launcher verification at the same published code head passed PL-26 and all 46 tests in `parser-limits`. It used `setsid --wait` and ordinary orphan reaping. The before and after digests matched. The separate `normal-run.json` SHA-256 is `742d257e458395943905d3238a9a19ebd4e96e80dc98c2965c440433b74d4319`, and its raw result SHA-256 is `72226f7abad988d010a6546d05c43851a692bca71fb402ee25ab076709f8c761`.
+
 ## Evidence integrity and first wrapper attempt
 
 The replacement batch manifest `SHA256SUMS` has 104 verified entries and SHA-256 `7bb7b21dc21c985fcd5458e6a79250c45a882c79740d733da2b9111d06624153`. `batch-summary.json` has SHA-256 `e9a59f69d7239de9b18cd7433c1a973b13dc7149f6f2df0ffa89d3d2521260eb`. The exact raw `us2-local-result.json` has SHA-256 `d18c7fbdce7d00bfe8821cf5e4770006d6f1829ab4cfc61478887506b157651c`.
