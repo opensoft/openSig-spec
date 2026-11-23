@@ -73,6 +73,12 @@ The replacement batch manifest `SHA256SUMS` has 104 verified entries and SHA-256
 The first wrapper attempt stopped after a passing US2 mode when its guard reported `owned processes remain; next modes stopped`. On follow-up all 49 recorded child IDs were absent. Their states at the original guard were unobserved. Its summary SHA-256 is `7f1ca4c73025f308c5db8481108251bdfa4dc888e6f101eb9517bcfa11c6a663` and manifest SHA-256 `f151919d3da5defb835a8139c4e2eb12bd283a49192a68bc99a472cfb76c381e`.
 The replacement run used the published code after the wrapper was corrected to reap exited adopted children before checking for live survivors. The wrapper patch SHA-256 is `6fcd2fd08c98e58ba38c5de9d3613751e69c3900aaefe0c4bfb528308540bd47`.
 
+## Follow-up diagnostics
+
+The bounded browser diagnostics left the SC001-03 failure mechanism unresolved. A held-response control reproduced the same radio error after the matching iframe had loaded, so the readiness-only patch failed its admission check. The pass in the event-traced comparison and all six ordinary checks in the alternating batch reached the same connected radio through trusted, uncancelled events. Those runs stopped before approval and recorded healthy comparisons.
+
+The six-context result is `alternating-radio-trace.json` with SHA-256 `fe7a87c4d451766826774652911a40c9198f4f36bae1f8b1d1dd110290898625`. Its wrapper evidence is `alternating-radio-trace-run.json` with SHA-256 `71cfec11a04afafd7a4abbcf61f97f734e3b95324a535962e0d68890ee056af1`. The failed Phase 4 result above governs the checkpoint.
+
 ## Determination
 
 Phase 4 stays open until the owner addresses the failed interaction and a fresh independent full checkpoint passes on a new published code head.
