@@ -17,6 +17,57 @@ openSig brings authenticated human approval and independently verifiable PDF pro
 
 The published MVP code PR remains a draft. Local passing results for the corrected US2 candidate are recorded separately from scope admission, independent acceptance and the exact published commit's Phase 4 receipt. [MVP tasks](https://github.com/opensoft/openSig-spec/blob/7a489258c1d8ae695e39a585e8939758f47bbe94/specs/001-corporate-signing-mvp/tasks.md), [code PR #2](https://github.com/opensoft/openSig-code/pull/2)
 
+## Optional signing authority verification
+
+Planned follow-on to the corporate signing MVP. Offer entity signing in two
+modes. **Autographed** completes the ordinary signing workflow and carries no
+blue checkmark. **Fully certified** is opt-in and earns the blue checkmark
+labeled **Signing authority verified** only when all required authority and
+signing checks pass for the completed document.
+
+- **Entity and governing records.** In preparation, confirm the entity's legal
+  name, jurisdiction, registration ID and good standing against the official
+  registry. Require its operative bylaws or operating agreement, including
+  amendments, and verify their provenance through an independently established
+  source. Use the formation and appointment records needed to establish who
+  actually holds the applicable office or role. An uploaded copy and a
+  self-asserted title alone are insufficient.
+- **Authority for the act.** Record the governing provision or existing
+  delegation, its effective dates, scope, limits and any co-signer requirements.
+  When standing authority does not cover the act or separate approval is
+  required, require a valid resolution or written consent from the governing
+  body empowered to approve it. Verify due adoption, effective status and scope
+  before relying on it.
+- **Human verification at signing.** Verify each human's identity when they
+  sign, match them to the verified appointment or named grant, and check that
+  their authority is still in effect. Capture their intent for the exact
+  document revision and their capacity. A certification request stays pending
+  until all required signatures and authority checks pass. Switching to
+  autograph-only requires an explicit choice.
+- **Verification evidence.** Bind the certification and blue checkmark to the
+  exact completed document and its evidence package. Retain the governing
+  version, applicable provisions, appointment and any resolution, and the date
+  and result of each check. Keep private governance records available for
+  authorized review. A valid PDF seal alone does not qualify for the checkmark.
+
+### First QA case — mock Viktory registered-agent consent
+
+Use the synthetic Suite 485 consent from Viktory Management, LLC to MedxRx LLC
+in isolated QA. Model the operating agreement, appointments, resolutions and
+human identities with synthetic records.
+
+- Complete the autograph-only flow and verify that the result is labeled
+  **Autographed** and has no blue checkmark.
+- Opt into certification and prove that verified standing authority for one
+  signer can produce a blue checkmark after human identity and authority are
+  checked at signing. Exercise a second fixture in which the same consent
+  needs separate approval and a valid resolution supplies that authority.
+- Verify that certification stays pending and the blue checkmark is withheld
+  for missing or unverified governing records, a missing or invalid required
+  resolution, a signer mismatch, revoked authority, or a missing required
+  co-signature. Verify that the certified package records the authority basis
+  and that verification fails for a modified document.
+
 ## Later work
 
 - **openChart.** Qualify the native consent and provenance workflow with synthetic records. Operational privacy and security acceptance precedes use of patient data. Clinical authority stays in openChart. The openWallet-backed attestation proposal awaits ratification and is a separate dependency for the clinical acts workflow that uses it. [Wallet-bound attestation draft](https://github.com/opensoft/openSig-spec/pull/4)
