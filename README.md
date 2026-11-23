@@ -30,6 +30,7 @@ Topic: `xf-project-opensig`.
 
 All original openSig, openAutograph and openCryptograph work is Apache-2.0. Shipped third-party materials must satisfy the MIT/Apache allowlist.
 
+- [Project roadmap](ROADMAP.md)
 - [Architecture overview](ideation/brainstorm/opensig-overview.md)
 - [Implementation plan](ideation/brainstorm/opensig-implementation-plan.md)
 - [Triad placement](TRIAD-SETUP.md)
